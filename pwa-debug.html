@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Debug - Générateur de CV</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f1f5f9;
+      color: #333;
+    }
+    h1 { color: #2563eb; }
+    .section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #1e3a5f;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 10px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+    }
+    .check.pass { background: #dcfce7; border-left: 4px solid #22c55e; }
+    .check.fail { background: #fee2e2; border-left: 4px solid #ef4444; }
+    .check.warn { background: #fef3c7; border-left: 4px solid #f59e0b; }
+    .check .icon { font-size: 1.5em; margin-right: 10px; }
+    .check .info { flex: 1; }
+    .check .value {
+      font-family: monospace;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1em;
+      margin: 5px;
+    }
+    button:hover { background: #1d4ed8; }
+    .log {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.85em;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .log .error { color: #f87171; }
+    .log .success { color: #86efac; }
+    .log .warn { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <h1>🔧 PWA Debug - Générateur de CV</h1>
+  <p>Cette page permet de vérifier que tous les éléments PWA sont correctement configurés.</p>
+  
+  <div class="section">
+    <h2>📋 Informations de base</h2>
+    <div id="basic-info"></div>
+  </div>
+  
+  <div class="section">
+    <h2>🔗 Manifest.json</h2>
+    <div id="manifest-check"></div>
+  </div>
+  
+  <div class="section">
+    <h2>👷 Service Worker</h2>
+    <div id="sw-check"></div>
+    <button onclick="registerSW()">Réenregistrer le Service Worker</button>
+    <button onclick="unregisterSW()">Désenregistrer le Service Worker</button>
+    <button onclick="clearCache()">Vider le cache</button>
+  </div>
+  
+  <div class="section">
+    <h2>📲 Installation PWA</h2>
+    <div id="install-check"></div>
+    <button onclick="triggerInstall()" id="btn-trigger-install" style="display:none;">📲 Installer maintenant</button>
+  </div>
+  
+  <div class="section">
+    <h2>📱 Détection appareil</h2>
+    <div id="device-check"></div>
+  </div>
+  
+  <div class="section">
+    <h2>📜 Logs</h2>
+    <div class="log" id="console-log"></div>
+    <button onclick="document.getElementById('console-log').innerHTML=''">Effacer les logs</button>
+  </div>
+
+  <script>
+    // Système de log
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('console-log');
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warn' ? 'warn' : '';
+      logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(`[PWA Debug] ${message}`);
+    }
+
+    function addCheck(containerId, pass, icon, title, value = '') {
+      const container = document.getElementById(containerId);
+      const div = document.createElement('div');
+      div.className = `check ${pass ? 'pass' : 'fail'}`;
+      div.innerHTML = `
+        <span class="icon">${icon}</span>
+        <div class="info">
+          <strong>${title}</strong>
+          ${value ? `<br><span class="value">${value}</span>` : ''}
+        </div>
+      `;
+      container.appendChild(div);
+      return pass;
+    }
+
+    // 1. Informations de base
+    log('=== Démarrage du diagnostic PWA ===');
+    
+    addCheck('basic-info', true, '🌐', 'Protocole', location.protocol);
+    addCheck('basic-info', true, '🔗', 'URL', location.href);
+    addCheck('basic-info', true, '🖥️', 'User Agent', navigator.userAgent.substring(0, 50) + '...');
+    addCheck('basic-info', location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1', 
+      location.protocol === 'https:' ? '✅' : '⚠️', 
+      'HTTPS requis', 
+      location.protocol === 'https:' ? 'OK' : '⚠️ Non-HTTPS peut bloquer PWA');
+
+    // 2. Vérification du manifest
+    log('Vérification du manifest.json...');
+    
+    fetch('manifest.json')
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(manifest => {
+        addCheck('manifest-check', true, '✅', 'manifest.json accessible', 'Chargé avec succès');
+        log('Manifest chargé: ' + JSON.stringify(manifest).substring(0, 100) + '...');
+        
+        addCheck('manifest-check', !!manifest.name, manifest.name ? '✅' : '❌', 'name', manifest.name || 'MANQUANT');
+        addCheck('manifest-check', !!manifest.short_name, manifest.short_name ? '✅' : '❌', 'short_name', manifest.short_name || 'MANQUANT');
+        addCheck('manifest-check', manifest.display === 'standalone', manifest.display === 'standalone' ? '✅' : '❌', 'display', manifest.display || 'MANQUANT');
+        addCheck('manifest-check', !!manifest.icons && manifest.icons.length >= 2, 
+          (manifest.icons && manifest.icons.length >= 2) ? '✅' : '❌', 
+          'Icônes (192+512)', 
+          manifest.icons ? `${manifest.icons.length} icônes` : 'AUCUNE');
+        
+        // Vérifier les icônes
+        if (manifest.icons) {
+          manifest.icons.forEach(icon => {
+            fetch(icon.src)
+              .then(r => {
+                addCheck('manifest-check', r.ok, r.ok ? '✅' : '❌', 
+                  `Icône ${icon.sizes}`, 
+                  `${icon.src} (${r.ok ? 'OK' : '404'})`);
+              })
+              .catch(() => {
+                addCheck('manifest-check', false, '❌', `Icône ${icon.sizes}`, `${icon.src} (ERREUR)`);
+              });
+          });
+        }
+      })
+      .catch(err => {
+        addCheck('manifest-check', false, '❌', 'manifest.json', `ERREUR: ${err.message}`);
+        log('ERREUR manifest: ' + err.message, 'error');
+      });
+
+    // 3. Service Worker
+    log('Vérification du Service Worker...');
+    
+    if ('serviceWorker' in navigator) {
+      addCheck('sw-check', true, '✅', 'Service Worker supporté');
+      
+      navigator.serviceWorker.getRegistration()
+        .then(registration => {
+          if (registration) {
+            addCheck('sw-check', true, '✅', 'Service Worker enregistré', registration.scope);
+            addCheck('sw-check', !!registration.active, registration.active ? '✅' : '⚠️', 'SW actif', 
+              registration.active ? 'Oui' : 'En attente');
+            addCheck('sw-check', !!registration.installing, registration.installing ? '⚠️' : '✅', 'SW installing',
+              registration.installing ? 'Nouvelle version en cours' : 'Aucune');
+            
+            if (registration.active) {
+              registration.active.postMessage({ type: 'PING' });
+            }
+          } else {
+            addCheck('sw-check', false, '❌', 'Service Worker enregistré', 'AUCUN SW trouvé');
+            log('Aucun Service Worker enregistré', 'warn');
+          }
+        })
+        .catch(err => {
+          addCheck('sw-check', false, '❌', 'Service Worker', `ERREUR: ${err.message}`);
+        });
+    } else {
+      addCheck('sw-check', false, '❌', 'Service Worker supporté', 'NON SUPPORTÉ par ce navigateur');
+      log('Service Worker non supporté!', 'error');
+    }
+
+    // 4. Installation PWA
+    log('Vérification beforeinstallprompt...');
+    
+    let deferredPrompt = null;
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      log('beforeinstallprompt déclenché!', 'success');
+      e.preventDefault();
+      deferredPrompt = e;
+      addCheck('install-check', true, '✅', 'beforeinstallprompt déclenché');
+      document.getElementById('btn-trigger-install').style.display = 'inline-block';
+    });
+    
+    window.addEventListener('appinstalled', () => {
+      log('Application installée!', 'success');
+      addCheck('install-check', true, '✅', 'Application installée');
+    });
+    
+    setTimeout(() => {
+      if (!deferredPrompt) {
+        addCheck('install-check', false, '⚠️', 'beforeinstallprompt', 
+          'Non déclenché (peut être normal selon le navigateur)');
+        log('beforeinstallprompt non déclenché - vérifiez les conditions PWA', 'warn');
+      }
+    }, 3000);
+
+    // 5. Détection appareil
+    function isIOS() {
+      return [
+        'iPad Simulator', 'iPhone Simulator', 'iPod Simulator',
+        'iPad', 'iPhone', 'iPod'
+      ].includes(navigator.platform) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+    }
+    
+    function isAndroid() {
+      return /Android/.test(navigator.userAgent);
+    }
+    
+    function isMobile() {
+      return /Mobi|Android/i.test(navigator.userAgent);
+    }
+    
+    addCheck('device-check', isMobile(), isMobile() ? '✅' : 'ℹ️', 'Appareil mobile', 
+      isMobile() ? 'OUI' : 'NON (Desktop)');
+    addCheck('device-check', isIOS(), isIOS() ? '✅' : 'ℹ️', 'iOS détecté', 
+      isIOS() ? 'OUI' : 'NON');
+    addCheck('device-check', isAndroid(), isAndroid() ? '✅' : 'ℹ️', 'Android détecté', 
+      isAndroid() ? 'OUI' : 'NON');
+    addCheck('device-check', window.matchMedia('(display-mode: standalone)').matches, 
+      window.matchMedia('(display-mode: standalone)').matches ? '✅' : 'ℹ️', 
+      'Mode standalone', 
+      window.matchMedia('(display-mode: standalone)').matches ? 'OUI (app installée)' : 'NON');
+
+    // Fonctions d'action
+    function registerSW() {
+      log('Tentative d\'enregistrement du SW...', 'warn');
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => {
+          log('SW enregistré: ' + reg.scope, 'success');
+          addCheck('sw-check', true, '✅', 'SW enregistré après action', reg.scope);
+        })
+        .catch(err => {
+          log('Échec enregistrement SW: ' + err.message, 'error');
+          addCheck('sw-check', false, '❌', 'SW enregistrement échoué', err.message);
+        });
+    }
+
+    function unregisterSW() {
+      log('Désenregistrement du SW...', 'warn');
+      navigator.serviceWorker.getRegistrations()
+        .then(registrations => {
+          registrations.forEach(reg => {
+            reg.unregister();
+            log('SW désenregistré: ' + reg.scope, 'success');
+          });
+          if (registrations.length === 0) {
+            log('Aucun SW à désenregistrer', 'warn');
+          }
+        });
+    }
+
+    function clearCache() {
+      log('Vidage du cache...', 'warn');
+      caches.keys()
+        .then(names => {
+          names.forEach(name => {
+            caches.delete(name);
+            log('Cache supprimé: ' + name, 'success');
+          });
+          if (names.length === 0) {
+            log('Aucun cache à supprimer', 'warn');
+          }
+        });
+    }
+
+    function triggerInstall() {
+      if (deferredPrompt) {
+        log('Déclenchement de l\'installation...', 'warn');
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(result => {
+          log('Résultat installation: ' + result.outcome, result.outcome === 'accepted' ? 'success' : 'warn');
+          deferredPrompt = null;
+          document.getElementById('btn-trigger-install').style.display = 'none';
+        });
+      } else {
+        log('Installation non disponible (deferredPrompt null)', 'error');
+      }
+    }
+
+    log('=== Diagnostic terminé ===');
+  </script>
+</body>
+</html>

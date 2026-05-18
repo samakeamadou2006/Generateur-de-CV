@@ -824,21 +824,69 @@ afficherPrevisualisation();
 
 // Variable pour stocker l'événement beforeinstallprompt
 let deferredPrompt = null;
+let isInstallable = false;
+
+/**
+ * Vérifie si la PWA est installable
+ */
+function verifierInstallabilite() {
+  console.log('[PWA] Vérification installabilité...');
+  
+  // Vérifier HTTPS
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    console.warn('[PWA] ⚠️ Le site doit être en HTTPS pour l\'installation PWA (sauf localhost)');
+    console.warn('[PWA] Protocole actuel:', location.protocol);
+  }
+  
+  // Vérifier Service Worker
+  if (!('serviceWorker' in navigator)) {
+    console.warn('[PWA] ⚠️ Service Worker non supporté par ce navigateur');
+  }
+  
+  // Vérifier Manifest
+  const manifestLink = document.querySelector('link[rel="manifest"]');
+  if (!manifestLink) {
+    console.warn('[PWA] ⚠️ Aucun manifest.json trouvé');
+  } else {
+    console.log('[PWA] Manifest trouvé:', manifestLink.href);
+  }
+}
 
 /**
  * Enregistrement du Service Worker
  */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
+    // Utiliser un chemin absolu pour le service worker
+    const swPath = window.location.pathname.endsWith('/') 
+      ? 'sw.js' 
+      : (window.location.pathname.lastIndexOf('/') === window.location.pathname.length - 1 ? 'sw.js' : 'sw.js');
+    
       .then((registration) => {
         console.log('[PWA] Service Worker enregistré avec succès:', registration.scope);
+        console.log('[PWA] État du SW:', registration.active ? 'actif' : 'en attente');
+        
+        // Vérifier les mises à jour du SW
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          console.log('[PWA] Nouvelle version du SW trouvée');
+          
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] Nouvelle version prête à être activée');
+              afficherStatut('Une nouvelle version est disponible, rechargez la page');
+            }
+          });
+        });
       })
       .catch((error) => {
         console.error('[PWA] Échec enregistrement Service Worker:', error);
       });
   });
 }
+
+// Vérifier l'installabilité au chargement
+verifierInstallabilite();
 
 /**
  * Création du bouton d'installation PWA
@@ -955,3 +1003,109 @@ document.addEventListener('DOMContentLoaded', () => {
 if (document.readyState !== 'loading') {
   creerBoutonInstallation();
 }
+
+/**
+ * ===================================================================
+ * SUPPORT iOS - Guide d'installation manuel
+ * ===================================================================
+ * iOS ne supporte pas beforeinstallprompt, donc on affiche un guide
+ * pour ajouter à l'écran d'accueil manuellement
+ */
+
+/**
+ * Détecte si l'utilisateur est sur iOS
+ */
+function isIOS() {
+  return [
+    'iPad Simulator',
+    'iPhone Simulator',
+    'iPod Simulator',
+    'iPad',
+    'iPhone',
+    'iPod'
+  ].includes(navigator.platform)
+  // iPad sur iOS 13+
+  || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+}
+
+/**
+ * Détecte si le navigateur est Safari sur iOS
+ */
+function isIOSSafari() {
+  return isIOS() && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+}
+
+/**
+ * Affiche un guide d'installation pour iOS
+ */
+function afficherGuideIOS() {
+  // Ne pas afficher si déjà installé
+  if (estEnModeStandalone()) return;
+  
+  // Ne pas afficher sur Chrome iOS (qui supporte beforeinstallprompt)
+  if (/Chrome/.test(navigator.userAgent)) return;
+  
+  console.log('[PWA] iOS détecté - affichage du guide d\'installation');
+  
+  // Créer le modal de guide
+  const modalHTML = `
+    <div class="modal-overlay" id="modal-install-ios" role="dialog" aria-label="Guide d'installation">
+      <div class="modal">
+        <h3>📲 Installer l'application</h3>
+        <p>Pour installer cette application sur votre écran d'accueil :</p>
+        <ol style="text-align: left; line-height: 1.8;">
+          <li>Appuyez sur le bouton <strong>Partager</strong> <span style="font-size:1.2em">📤</span></li>
+          <li>Faites défiler et appuyez sur <strong>"Sur l'écran d'accueil"</strong></li>
+          <li>Appuyez sur <strong>Ajouter</strong> en haut à droite</li>
+        </ol>
+        <div class="modal-actions">
+          <button class="btn btn-primaire" id="btn-fermer-guide-ios">Compris</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Ajouter le modal au body
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = modalHTML;
+  document.body.appendChild(tempDiv.firstElementChild);
+  
+  // Gérer la fermeture
+  const modal = document.getElementById('modal-install-ios');
+  const btnFermer = document.getElementById('btn-fermer-guide-ios');
+  
+  btnFermer.addEventListener('click', () => {
+    modal.hidden = true;
+    setTimeout(() => modal.remove(), 300);
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.hidden = true;
+      setTimeout(() => modal.remove(), 300);
+    }
+  });
+}
+
+/**
+ * Affiche un message d'information pour les navigateurs qui ne supportent pas PWA
+ */
+function afficherInfoPWA() {
+  // Si beforeinstallprompt n'est pas supporté et qu'on n'est pas sur iOS
+  if (!('onbeforeinstallprompt' in window) && !isIOS()) {
+    console.log('[PWA] beforeinstallprompt non supporté sur ce navigateur');
+    
+    // Firefox supporte PWA mais sans beforeinstallprompt
+    if (/Firefox/.test(navigator.userAgent)) {
+      console.log('[PWA] Firefox - L\'installation est possible via le menu (trois points) > Installer');
+    }
+  }
+}
+
+// Afficher le guide iOS après un délai (après que l'utilisateur a interagi avec le site)
+if (isIOSSafari()) {
+  setTimeout(afficherGuideIOS, 3000);
+}
+
+// Afficher les infos PWA
+afficherInfoPWA();

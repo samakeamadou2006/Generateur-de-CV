@@ -9,15 +9,15 @@ const CACHE_NAME = 'generateur-cv-v1';
 // Liste des fichiers à mettre en cache lors de l'installation
 const FILES_TO_CACHE = [
   './',
-  './index.html',
-  './style.css',
-  './script.js',
-  './manifest.json',
-  './logo.cv.png',
-  './icons/icon-192x192.svg',
-  './icons/icon-512x512.svg',
-  './icons/icon-192x192.png',
-  './icons/icon-512x512.png'
+  'index.html',
+  'style.css',
+  'script.js',
+  'manifest.json',
+  'logo.cv.png',
+  'icons/icon-192x192.svg',
+  'icons/icon-512x512.svg',
+  'icons/icon-192x192.png',
+  'icons/icon-512x512.png'
 ];
 
 /**
