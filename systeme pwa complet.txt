@@ -1,0 +1,64 @@
+Ajoute le système PWA complet à mon site web déjà existant afin qu’il soit installable comme une vraie application mobile sur Android et PC.
+
+OBJECTIF :
+Quand un utilisateur ouvre mon site, il doit pouvoir voir le bouton “Installer l’application” ou recevoir la proposition “Ajouter à l’écran d’accueil”.
+
+À FAIRE :
+
+1. Créer un fichier manifest.json moderne avec :
+
+- name
+- short_name
+- theme_color
+- background_color
+- display: standalone
+- start_url
+- orientation
+- icônes 192x192 et 512x512
+
+2. Ajouter automatiquement dans le <head> :
+
+<link rel="manifest">
+<meta name="theme-color">3. Créer un service worker complet :
+
+- installation du cache
+- fonctionnement hors ligne
+- mise en cache des fichiers CSS, JS, images et HTML
+- stratégie simple et propre
+
+4. Enregistrer automatiquement le service worker dans JavaScript.
+
+5. Ajouter un bouton “Installer l’application” élégant qui :
+
+- apparaît uniquement si l’installation est disponible
+- utilise beforeinstallprompt
+- déclenche l’installation PWA
+- est responsive et moderne
+
+6. Vérifier que tout fonctionne correctement sur :
+
+- mobile Android
+- Chrome
+- GitHub Pages
+- HTTPS
+
+7. Garder le design actuel de mon site intact.
+   Ne pas casser mon interface existante.
+   Le code doit être intégré proprement à mon projet actuel.
+
+8. Générer :
+
+- le code complet du manifest.json
+- le code complet du service worker
+- le JavaScript d’installation
+- les modifications HTML nécessaires
+- la structure des dossiers finale
+
+9. Optimiser la PWA pour :
+
+- rapidité
+- expérience mobile
+- lancement plein écran
+- comportement comme une vraie application native
+
+10. Ajouter des commentaires dans le code pour expliquer chaque partie importante.

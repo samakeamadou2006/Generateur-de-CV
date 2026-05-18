@@ -1,0 +1,49 @@
+## Améliorations possibles
+
+### 1. Sécurité
+
+- Échapper toutes les données avant injection HTML
+- Valider les types MIME des images uploadées
+- Ajouter un attribut `rel="noopener noreferrer"` si liens externes
+
+### 2. Performance
+
+- Compresser/redimensionner les images avant stockage
+- Implémenter un debounce sur les événements input
+- Utiliser DocumentFragment pour les ajouts multiples
+
+### 3. Expérience utilisateur
+
+- Ajouter une validation de formulaire (email, téléphone)
+- Ajouter des messages d'erreur pour les champs invalides
+- Permettre le drag & drop pour la photo
+- Ajouter un indicateur de sauvegarde
+- Permettre de réorganiser les éléments (drag & drop)
+
+### 4. Fonctionnalités
+
+- Export JSON du CV
+- Import JSON pour reprendre un CV
+- Plusieurs modèles de CV (pas seulement couleur/style)
+- Prévisualisation A4 exacte avec margins
+- Option pour masquer certaines sections
+
+### 5. Accessibilité
+
+- Ajouter des attributs `aria-label` aux boutons sans texte
+- Gérer la navigation au clavier pour les éléments dynamiques
+- Ajouter un contraste suffisant pour les couleurs choisies
+- Annoncer les changements dynamiques aux lecteurs d'écran
+
+### 6. Code quality
+
+- Modulariser le code (séparer les responsabilités)
+- Ajouter des tests unitaires
+- Utiliser ESLint pour la qualité du code
+- Documenter les fonctions complexes
+
+### 7. Gestion d'erreurs
+
+- Gérer les erreurs de lecture de fichiers
+- Gérer les erreurs de localStorage plein
+- Ajouter un fallback si JavaScript est désactivé

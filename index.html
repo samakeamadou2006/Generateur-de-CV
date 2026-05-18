@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Générateur de CV</title>
+  <link rel="stylesheet" href="style.css" />
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="application-name" content="Générateur CV" />
+  <link rel="icon" href="logo.cv.png" type="image/png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Générateur CV" />
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png" />
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- EN-TÊTE APPLICATION -->
+    <header class="app-entete">
+      <div class="app-entete-gauche">
+          <div class="logo-box">
+            <img src="logo.cv.png" alt="Logo Générateur de CV" />
+          </div>
+          <div>
+            <h1 class="app-titre">Générateur de CV</h1>
+            <p class="app-sous-titre">Remplis · Prévisualise en temps réel · Exporte en PDF</p>
+          </div>
+        </div>
+        <div class="app-actions">
+          <button class="btn btn-primaire" id="btn-install-pwa" style="display:none;">📲 Installer l'application</button>
+          <button class="btn btn-secondaire" id="btn-reset">🗑 Réinitialiser</button>
+          <button class="btn btn-primaire" id="btn-pdf">📄 Exporter PDF</button>
+        </div>
+      </header>
+      <div class="app-status" aria-live="polite" id="statut-sauvegarde">Sauvegarde automatique activée</div>
+      <!-- ===== CORPS (FORMULAIRE + PRÉVISUALISATION) ===== -->
+      <div class="corps">
+        <!-- ===== FORMULAIRE ===== -->
+        <aside class="formulaire" id="formulaire">
+
+        <!-- PERSONNALISATION -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">🎨 Personnalisation</h2>
+          <div class="champ">
+            <label>Couleur du CV</label>
+            <div class="couleurs-palette" id="couleurs-palette">
+              <button class="couleur-btn actif" data-couleur="#1e3a5f" style="background:#1e3a5f" title="Bleu marine"></button>
+              <button class="couleur-btn" data-couleur="#1a5276" style="background:#1a5276" title="Bleu acier"></button>
+              <button class="couleur-btn" data-couleur="#1e8449" style="background:#1e8449" title="Vert forêt"></button>
+              <button class="couleur-btn" data-couleur="#6c3483" style="background:#6c3483" title="Violet"></button>
+            </div>
+          </div>
+          <div class="champ">
+            <label>Style niveau (compétences & langues)</label>
+            <div class="style-toggle">
+              <button class="style-btn actif" id="btn-points" data-style="points">● Points</button>
+              <button class="style-btn" id="btn-barres" data-style="barres">▬ Barres</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- INFOS PERSONNELLES -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">👤 Informations personnelles</h2>
+
+          <div class="photo-upload" id="photo-upload" role="button" tabindex="0" aria-label="Télécharger la photo de profil">
+            <div class="photo-placeholder" id="photo-placeholder">
+              <span>📷</span><small>Ajouter photo</small>
+            </div>
+            <img src="" alt="Photo" class="photo-preview" id="photo-preview" hidden />
+            <input type="file" id="input-photo" accept="image/*" hidden />
+          </div>
+
+          <div class="champ-double">
+            <div class="champ">
+              <label>Prénom(s)</label>
+              <input type="text" id="inp-prenom" placeholder="ANGE NOEL KALILE" data-champ="prenom" />
+            </div>
+            <div class="champ">
+              <label>Nom</label>
+              <input type="text" id="inp-nom" placeholder="KASSI" data-champ="nom" />
+            </div>
+          </div>
+          <div class="champ-double">
+            <div class="champ">
+              <label>Date de naissance</label>
+              <input type="text" id="inp-naissance" placeholder="24 décembre 2004" data-champ="naissance" />
+            </div>
+            <div class="champ">
+              <label>Lieu de naissance</label>
+              <input type="text" id="inp-lieu" placeholder="GRAND-BASSAM" data-champ="lieu" />
+            </div>
+          </div>
+          <div class="champ-double">
+            <div class="champ">
+              <label>Sexe</label>
+              <select id="inp-sexe" data-champ="sexe">
+                <option value="">--</option>
+                <option value="Homme">Homme</option>
+                <option value="Femme">Femme</option>
+              </select>
+            </div>
+            <div class="champ">
+              <label>Nationalité</label>
+              <input type="text" id="inp-nationalite" placeholder="IVOIRIENNE" data-champ="nationalite" />
+            </div>
+          </div>
+          <div class="champ-double">
+            <div class="champ">
+              <label for="inp-email">Email</label>
+              <input type="email" id="inp-email" placeholder="email@exemple.com" data-champ="email" aria-describedby="erreur-email" />
+              <small class="champ-erreur" id="erreur-email" hidden></small>
+            </div>
+            <div class="champ">
+              <label for="inp-telephone">Téléphone</label>
+              <input type="text" id="inp-telephone" placeholder="+225 07 00 00 00" data-champ="telephone" aria-describedby="erreur-telephone" />
+              <small class="champ-erreur" id="erreur-telephone" hidden></small>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROFIL -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">📝 Profil</h2>
+          <div class="champ">
+            <textarea id="inp-profil" rows="4" placeholder="Décris ton profil en quelques phrases..."></textarea>
+          </div>
+        </div>
+
+        <!-- COMPÉTENCES -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">⚡ Compétences</h2>
+          <div id="liste-competences"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="competences">+ Ajouter une compétence</button>
+        </div>
+
+        <!-- LANGUES -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">🌍 Langues</h2>
+          <div id="liste-langues"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="langues">+ Ajouter une langue</button>
+        </div>
+
+        <!-- CENTRES D'INTÉRÊT -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">❤️ Centres d'intérêt</h2>
+          <div id="liste-interets"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="interets">+ Ajouter un intérêt</button>
+        </div>
+
+        <!-- FORMATION -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">🎓 Formation</h2>
+          <div id="liste-formations"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="formations">+ Ajouter une formation</button>
+        </div>
+
+        <!-- EXPÉRIENCE -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">💼 Expérience professionnelle</h2>
+          <div id="liste-experiences"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="experiences">+ Ajouter une expérience</button>
+        </div>
+
+        <!-- ACTIVITÉS EXTRA-SCOLAIRES -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">🏆 Activités extra-scolaires</h2>
+          <div id="liste-activites"></div>
+          <button class="btn-ajouter" data-action="ajouter" data-section="activites">+ Ajouter une activité</button>
+        </div>
+
+        <!-- RÉFÉRENCES -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">📋 Références</h2>
+          <div class="champ">
+            <textarea id="inp-references" rows="2" placeholder="Références disponibles sur demande."></textarea>
+          </div>
+        </div>
+
+        <!-- SIGNATURE -->
+        <div class="bloc-form">
+          <h2 class="bloc-titre">✍️ Signature</h2>
+          <div class="champ">
+            <label>Ville et date</label>
+            <input type="text" id="inp-sign-lieu" placeholder="Samo, 12 avril 2026" data-champ="signLieu" />
+          </div>
+          <div class="champ">
+            <label>Signature (texte → style manuscrit)</label>
+            <input type="text" id="inp-signature" placeholder="Ton prénom ou surnom" data-champ="signature" />
+          </div>
+          <div class="champ">
+            <label>OU uploader une image de signature</label>
+            <div class="sign-upload-zone" id="sign-upload-zone" role="button" tabindex="0" aria-label="Uploader une image de signature">
+              <span id="sign-upload-label">📎 Cliquer pour uploader</span>
+              <img src="" alt="Signature" class="sign-img-preview" id="sign-img-preview" hidden />
+              <input type="file" id="input-signature-img" accept="image/*" hidden />
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+        <!-- ===== PRÉVISUALISATION CV ===== -->
+        <main class="previsualisation" id="previsualisation">
+        <div class="cv-wrapper" id="cv-wrapper">
+
+          <!-- COLONNE GAUCHE -->
+          <div class="cv-gauche" id="cv-gauche">
+
+            <!-- Photo + Nom -->
+            <div class="cv-photo-bloc">
+              <div class="cv-photo-cercle" id="cv-photo-cercle">
+                <img src="" alt="" class="cv-photo" id="cv-photo" hidden />
+                <span class="cv-photo-initiales" id="cv-initiales">?</span>
+              </div>
+              <h1 class="cv-nom" id="cv-nom">PRÉNOM NOM</h1>
+            </div>
+
+            <!-- Infos personnelles -->
+            <div class="cv-section-gauche">
+              <h2 class="cv-titre-gauche">Informations personnelles</h2>
+              <ul class="cv-infos-liste" id="cv-infos-liste">
+                <li class="cv-info-item" id="cv-info-nom"><span class="cv-info-icone">👤</span><span id="cv-info-nom-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-naissance"><span class="cv-info-icone">📅</span><span id="cv-info-naissance-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-lieu"><span class="cv-info-icone">📍</span><span id="cv-info-lieu-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-sexe"><span class="cv-info-icone">⚤</span><span id="cv-info-sexe-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-nationalite"><span class="cv-info-icone">🏳</span><span id="cv-info-nationalite-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-email" hidden><span class="cv-info-icone">✉</span><span id="cv-info-email-txt"></span></li>
+                <li class="cv-info-item" id="cv-info-tel" hidden><span class="cv-info-icone">📞</span><span id="cv-info-tel-txt"></span></li>
+              </ul>
+            </div>
+
+            <!-- Compétences -->
+            <div class="cv-section-gauche" id="cv-section-competences">
+              <h2 class="cv-titre-gauche">Compétences</h2>
+              <div id="cv-competences"></div>
+            </div>
+
+            <!-- Langues -->
+            <div class="cv-section-gauche" id="cv-section-langues">
+              <h2 class="cv-titre-gauche">Langues</h2>
+              <div id="cv-langues"></div>
+            </div>
+
+            <!-- Centres d'intérêt -->
+            <div class="cv-section-gauche" id="cv-section-interets">
+              <h2 class="cv-titre-gauche">Centres d'intérêt</h2>
+              <div id="cv-interets"></div>
+            </div>
+
+            <!-- Décoration bas gauche -->
+            <div class="cv-deco-bas"></div>
+
+          </div>
+
+          <!-- COLONNE DROITE -->
+          <div class="cv-droite">
+
+            <!-- Profil -->
+            <div class="cv-section-droite">
+              <h2 class="cv-titre-droite">Profil</h2>
+              <p class="cv-texte" id="cv-profil">Votre profil apparaîtra ici...</p>
+            </div>
+
+            <!-- Formation -->
+            <div class="cv-section-droite">
+              <h2 class="cv-titre-droite">Formation</h2>
+              <div id="cv-formations"></div>
+            </div>
+
+            <!-- Expérience -->
+            <div class="cv-section-droite">
+              <h2 class="cv-titre-droite">Expérience professionnelle</h2>
+              <div id="cv-experiences"></div>
+            </div>
+
+            <!-- Activités extra-scolaires -->
+            <div class="cv-section-droite" id="cv-section-activites">
+              <h2 class="cv-titre-droite">Activités extra-scolaires</h2>
+              <div id="cv-activites"></div>
+            </div>
+
+            <!-- Références -->
+            <div class="cv-section-droite">
+              <h2 class="cv-titre-droite">Références</h2>
+              <p class="cv-texte" id="cv-references">Références disponibles sur demande.</p>
+            </div>
+
+            <!-- Signature -->
+            <div class="cv-signature-bloc" id="cv-signature-bloc">
+              <p class="cv-sign-lieu" id="cv-sign-lieu"></p>
+              <div class="cv-sign-wrap">
+                <p class="cv-signature-texte" id="cv-signature-texte"></p>
+                <img src="" alt="Signature" class="cv-signature-img" id="cv-signature-img" hidden />
+              </div>
+            </div>
+
+            <!-- Mention RGPD -->
+            <p class="cv-rgpd" id="cv-rgpd">J'accepte que mes données personnelles soient traitées dans le cadre du processus de recrutement pour l'emploi auquel je postule.</p>
+
+          </div>
+        </div>
+      </main>
+      </div>
+      <!-- Fin .corps -->
+
+    </div>
+  </div>
+
+  <!-- MODAL RESET -->
+  <div class="modal-overlay" id="modal-reset" hidden>
+    <div class="modal">
+      <h3>⚠️ Réinitialiser ?</h3>
+      <p>Toutes les données du CV seront supprimées.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondaire" id="btn-reset-annuler">Annuler</button>
+        <button class="btn btn-danger" id="btn-reset-confirmer">Oui, supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
