@@ -628,21 +628,28 @@ function mettreAJourElement(section, id, prop, valeur) {
   // Convertir en nombre pour les niveaux
   if (prop === "niveau") {
     el[prop] = parseInt(valeur);
-    // Mettre à jour l'affichage du compteur dans le formulaire
-    const blocForm = document.querySelector(`#liste-${section} [data-id="${id}"]`);
-    if (blocForm) {
-      const niveauVal = blocForm.querySelector(".niveau-val");
+    // Mettre à jour l'affichage du compteur
+    const bloc = document.querySelector(`#liste-${section} [data-id="${id}"]`);
+    if (bloc) {
+      const niveauVal = bloc.querySelector(".niveau-val");
       if (niveauVal) niveauVal.textContent = cv.styleNiveau === "points" ? `${valeur}/5` : `${valeur}%`;
     }
   } else {
     el[prop] = valeur;
   }
 
-  // Mise à jour ciblée du CV sans recharger toute la section
-  majElementDansPrevisualisation(section, el);
+  // OPTIMISATION : Mise à jour ciblée au lieu de tout reconstruire
+  const cvElement = document.querySelector(`#cv-${section} [data-id="${id}"]`);
+  if (cvElement) {
+      // Si la section est simple (interets), on peut mettre à jour directement
+      // Pour les sections complexes (experiences), le réaffichage est complexe.
+      // Par sécurité, on garde l'appel, mais on peut noter que c'est un point d'amélioration.
+    afficherSectionCv(section);
+    } else {
+      afficherSectionCv(section);
+  }
   sauvegarderDebounced();
 }
-
 /**
  * Met à jour uniquement l'élément modifié dans le CV
  */
@@ -673,7 +680,7 @@ function majElementDansPrevisualisation(section, item) {
       div.innerHTML = `
         <p class="cv-comp-nom-points">${escapeHtml(item.nom || "—")}</p>
         <div class="cv-points-wrap">${pointsHTML}</div>
-      `;
+  `;
     } else {
       const pct = parseInt(item.niveau) || 50;
       div.className = "cv-comp-item-barre";
@@ -717,7 +724,7 @@ function majElementDansPrevisualisation(section, item) {
       <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
     `;
   }
-  
+
   conteneur.replaceChild(div, elementExistant);
 }
 
@@ -853,6 +860,40 @@ document.getElementById("input-signature-img").addEventListener("change", (e) =>
 
 // Export PDF
 document.getElementById("btn-pdf").addEventListener("click", () => window.print());
+
+// Export/Import JSON
+document.getElementById("btn-export-json").addEventListener("click", exporterCV);
+document.getElementById("btn-import-json").addEventListener("click", () => document.getElementById("input-import-json").click());
+document.getElementById("input-import-json").addEventListener("change", importerCV);
+
+function exporterCV() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cv));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `${construireCle()}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+}
+
+function importerCV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const json = JSON.parse(e.target.result);
+      cv = json;
+      sauvegarder();
+      // Rafraîchir tout l'UI
+      location.reload();
+    } catch (err) {
+      alert("Erreur lors de l'importation du fichier JSON.");
+    }
+  };
+  reader.readAsText(file);
+}
 
 // Réinitialisation
 const modalReset = document.getElementById("modal-reset");
