@@ -1032,32 +1032,46 @@ function creerBoutonInstallation() {
 }
 
 /**
+ * Initialisation PWA au chargement
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  // On s'assure que le bouton existe
+  creerBoutonInstallation();
+
+  // Si déjà installé, cacher le bouton
+  if (estEnModeStandalone()) {
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) btnInstall.style.display = 'none';
+  } else {
+    // Rendre le bouton visible sur tous les navigateurs compatibles PWA
+    // même avant que 'beforeinstallprompt' ne soit déclenché.
+    // Cela améliore la visibilité de l'option d'installation.
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) btnInstall.style.display = 'block';
+  }
+});
+
+/**
  * Installation de la PWA
  */
 function installerPWA() {
-  if (!deferredPrompt) {
-    console.log('[PWA] Installation non disponible');
-    return;
-  }
-
-  // Afficher le bouton dans la barre d'adresse (mobile) ou la modale (desktop)
-  deferredPrompt.prompt();
-
-  deferredPrompt.userChoice.then((choiceResult) => {
-    if (choiceResult.outcome === 'accepted') {
-      console.log('[PWA] Installation acceptée par l\'utilisateur');
-      afficherStatut('Application installée avec succès !');
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        afficherStatut('Application installée avec succès !');
+      }
+      deferredPrompt = null;
+    });
+  } else {
+    // Si deferredPrompt est null, l'installation automatique n'est pas disponible
+    // On peut informer l'utilisateur ou rediriger vers un guide
+    if (isIOS()) {
+        // Déjà géré par afficherGuideIOS
     } else {
-      console.log('[PWA] Installation refusée par l\'utilisateur');
+        alert("L'installation automatique n'est pas supportée par votre navigateur. Vous pouvez installer cette application via le menu '...' (Paramètres) de votre navigateur.");
     }
-    deferredPrompt = null;
-
-    // Cacher le bouton après tentative
-    const btnInstall = document.getElementById('btn-install-pwa');
-    if (btnInstall) {
-      btnInstall.style.display = 'none';
-    }
-  });
+  }
 }
 
 /**
@@ -1075,7 +1089,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
     btnInstall.style.display = 'block';
   }
 });
-
 /**
  * Détecte quand l'application est installée
  */
@@ -1097,28 +1110,10 @@ function estEnModeStandalone() {
          window.navigator.standalone === true;
 }
 
-/**
- * Initialisation PWA au chargement
- */
-document.addEventListener('DOMContentLoaded', () => {
-  // Créer le bouton d'installation
-  creerBoutonInstallation();
-
-  // Si déjà installé, cacher le bouton
-  if (estEnModeStandalone()) {
-    const btnInstall = document.getElementById('btn-install-pwa');
-    if (btnInstall) {
-      btnInstall.style.display = 'none';
-    }
-    console.log('[PWA] Déjà en mode application installée');
-  }
-});
-
 // Créer le bouton immédiatement si le DOM est déjà chargé
 if (document.readyState !== 'loading') {
   creerBoutonInstallation();
 }
-
 /**
  * ===================================================================
  * SUPPORT iOS - Guide d'installation manuel
