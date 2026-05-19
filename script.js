@@ -628,18 +628,97 @@ function mettreAJourElement(section, id, prop, valeur) {
   // Convertir en nombre pour les niveaux
   if (prop === "niveau") {
     el[prop] = parseInt(valeur);
-    // Mettre à jour l'affichage du compteur
-    const bloc = document.querySelector(`#liste-${section} [data-id="${id}"]`);
-    if (bloc) {
-      const niveauVal = bloc.querySelector(".niveau-val");
+    // Mettre à jour l'affichage du compteur dans le formulaire
+    const blocForm = document.querySelector(`#liste-${section} [data-id="${id}"]`);
+    if (blocForm) {
+      const niveauVal = blocForm.querySelector(".niveau-val");
       if (niveauVal) niveauVal.textContent = cv.styleNiveau === "points" ? `${valeur}/5` : `${valeur}%`;
     }
   } else {
     el[prop] = valeur;
   }
 
-  afficherSectionCv(section);
+  // Mise à jour ciblée du CV sans recharger toute la section
+  majElementDansPrevisualisation(section, el);
   sauvegarderDebounced();
+}
+
+/**
+ * Met à jour uniquement l'élément modifié dans le CV
+ */
+function majElementDansPrevisualisation(section, item) {
+  const conteneur = document.getElementById(`cv-${section}`);
+  if (!conteneur) return;
+
+  const elementExistant = conteneur.querySelector(`[data-id="${item.id}"]`);
+
+  // Si l'élément n'existe pas encore ou si le style de niveau a changé, on recharge la section (cas rare)
+  if (!elementExistant) {
+    afficherSectionCv(section);
+    return;
+  }
+
+  // Sinon, on recrée juste cet élément spécifique et on remplace l'ancien
+  const div = document.createElement("div");
+  div.dataset.id = item.id;
+
+  if (section === "competences" || section === "langues") {
+    if (cv.styleNiveau === "points") {
+      const niveau = parseInt(item.niveau) || 3;
+      let pointsHTML = "";
+      for (let i = 1; i <= 5; i++) {
+        pointsHTML += `<span class="cv-point ${i <= niveau ? "rempli" : ""}"></span>`;
+      }
+      div.className = "cv-comp-item-points";
+      div.innerHTML = `
+        <p class="cv-comp-nom-points">${escapeHtml(item.nom || "—")}</p>
+        <div class="cv-points-wrap">${pointsHTML}</div>
+      `;
+    } else {
+      const pct = parseInt(item.niveau) || 50;
+      div.className = "cv-comp-item-barre";
+      div.innerHTML = `
+        <p class="cv-comp-nom-barre">${escapeHtml(item.nom || "—")}</p>
+        <div class="cv-barre-fond">
+          <div class="cv-barre-fill" style="width:${pct}%"></div>
+        </div>
+      `;
+    }
+  } else if (section === "interets") {
+    div.className = "cv-interet-item";
+    div.innerHTML = `<span class="cv-interet-carre"></span><span>${escapeHtml(item.nom || "—")}</span>`;
+  } else if (section === "formations") {
+    div.className = "cv-item-droite";
+    div.innerHTML = `
+      <div class="cv-item-header">
+        <span class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</span>
+        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
+      </div>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.etablissement || "")}</p>
+      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
+    `;
+  } else if (section === "experiences") {
+    div.className = "cv-item-droite";
+    const puces = item.puces ? item.puces.split("\n").filter(l => l.trim()) : [];
+    const pucesHTML = puces.length > 0 ? `<ul class="cv-item-puces">${puces.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : "";
+    div.innerHTML = `
+      <div class="cv-item-header">
+        <span class="cv-item-titre-d">${escapeHtml(item.poste || "—")}</span>
+        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
+      </div>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
+      ${pucesHTML}
+    `;
+  } else if (section === "activites") {
+    div.className = "cv-item-droite";
+    div.innerHTML = `
+      <p class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</p>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
+      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
+    `;
+  }
+  
+  conteneur.replaceChild(div, elementExistant);
 }
 
 // ============================================================
@@ -816,7 +895,6 @@ afficherPrevisualisation();
 // ============================================================
 // PWA - INSTALLATION
 // ============================================================
-
 /**
  * Gestion de l'installation PWA
  * Affiche un bouton "Installer l'application" quand disponible
@@ -831,18 +909,18 @@ let isInstallable = false;
  */
 function verifierInstallabilite() {
   console.log('[PWA] Vérification installabilité...');
-  
+
   // Vérifier HTTPS
   if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     console.warn('[PWA] ⚠️ Le site doit être en HTTPS pour l\'installation PWA (sauf localhost)');
     console.warn('[PWA] Protocole actuel:', location.protocol);
   }
-  
+
   // Vérifier Service Worker
   if (!('serviceWorker' in navigator)) {
     console.warn('[PWA] ⚠️ Service Worker non supporté par ce navigateur');
   }
-  
+
   // Vérifier Manifest
   const manifestLink = document.querySelector('link[rel="manifest"]');
   if (!manifestLink) {
@@ -857,20 +935,16 @@ function verifierInstallabilite() {
  */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Utiliser un chemin absolu pour le service worker
-    const swPath = window.location.pathname.endsWith('/') 
-      ? 'sw.js' 
-      : (window.location.pathname.lastIndexOf('/') === window.location.pathname.length - 1 ? 'sw.js' : 'sw.js');
-    
+    navigator.serviceWorker.register('sw.js')
       .then((registration) => {
         console.log('[PWA] Service Worker enregistré avec succès:', registration.scope);
         console.log('[PWA] État du SW:', registration.active ? 'actif' : 'en attente');
-        
+
         // Vérifier les mises à jour du SW
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           console.log('[PWA] Nouvelle version du SW trouvée');
-          
+
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
               console.log('[PWA] Nouvelle version prête à être activée');
@@ -936,7 +1010,7 @@ function installerPWA() {
       console.log('[PWA] Installation refusée par l\'utilisateur');
     }
     deferredPrompt = null;
-    
+
     // Cacher le bouton après tentative
     const btnInstall = document.getElementById('btn-install-pwa');
     if (btnInstall) {
@@ -1041,12 +1115,12 @@ function isIOSSafari() {
 function afficherGuideIOS() {
   // Ne pas afficher si déjà installé
   if (estEnModeStandalone()) return;
-  
+
   // Ne pas afficher sur Chrome iOS (qui supporte beforeinstallprompt)
   if (/Chrome/.test(navigator.userAgent)) return;
-  
+
   console.log('[PWA] iOS détecté - affichage du guide d\'installation');
-  
+
   // Créer le modal de guide
   const modalHTML = `
     <div class="modal-overlay" id="modal-install-ios" role="dialog" aria-label="Guide d'installation">
@@ -1064,21 +1138,21 @@ function afficherGuideIOS() {
       </div>
     </div>
   `;
-  
+
   // Ajouter le modal au body
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = modalHTML;
   document.body.appendChild(tempDiv.firstElementChild);
-  
+
   // Gérer la fermeture
   const modal = document.getElementById('modal-install-ios');
   const btnFermer = document.getElementById('btn-fermer-guide-ios');
-  
+
   btnFermer.addEventListener('click', () => {
     modal.hidden = true;
     setTimeout(() => modal.remove(), 300);
   });
-  
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       modal.hidden = true;
@@ -1109,3 +1183,4 @@ if (isIOSSafari()) {
 
 // Afficher les infos PWA
 afficherInfoPWA();
+
