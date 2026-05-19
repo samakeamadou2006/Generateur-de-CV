@@ -1,7 +1,7 @@
 {
   "name": "Générateur de CV - Créez votre CV professionnel",
   "short_name": "Générateur CV",
-  "description": "Application de génération de CV professionnel avec prévisualisation en temps réel et export PDF",
+  "description": "Application de génération de CV professionnel avec prévisualisation en temps réel et export PDF. Créez, personnalisez et exportez votre CV facilement.",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -9,7 +9,7 @@
   "theme_color": "#2563eb",
   "scope": "./",
   "lang": "fr",
-  "categories": ["productivity", "utilities", "education"],
+  "categories": ["productivity", "utilities", "education", "business"],
   "icons": [
     {
       "src": "icons/icon-192x192.png",
@@ -36,12 +36,35 @@
       "purpose": "any maskable"
     }
   ],
+  "screenshots": [
+    {
+      "src": "screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Interface de génération de CV sur ordinateur"
+    },
+    {
+      "src": "screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Interface mobile du générateur de CV"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Nouveau CV",
       "short_name": "Nouveau",
-      "description": "Commencer un nouveau CV",
+      "description": "Commencer un nouveau CV vierge",
       "url": "./?nouveau=true",
+      "icons": [{ "src": "icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Importer CV",
+      "short_name": "Importer",
+      "description": "Importer un CV depuis un fichier JSON",
+      "url": "./?import=true",
       "icons": [{ "src": "icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ],

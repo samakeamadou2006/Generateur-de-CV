@@ -45,6 +45,21 @@ function escapeHtml(text) {
 }
 
 /**
+ * Échappe une chaîne pour un attribut HTML
+ * @param {string} text - Le texte à échapper
+ * @returns {string} - Le texte échappé
+ */
+function escapeHtmlAttr(text) {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .replace(/&/g, '&')
+    .replace(/"/g, '"')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '<')
+    .replace(/>/g, '>');
+}
+
+/**
  * Valide le type MIME d'un fichier image
  * @param {File} file - Le fichier à valider
  * @returns {boolean} - true si le type est valide
@@ -102,10 +117,39 @@ function getInitiales() {
   return (p || "") + (n || "") || "?";
 }
 
-// Convertir niveau 1-5 (points) ou 0-100 (barres)
-function niveauEnPoints(valeur) {
-  // valeur est 1 à 5
-  return parseInt(valeur) || 3;
+// ============================================================
+// COMPRESSION D'IMAGES
+// ============================================================
+function compresserImage(dataUrl, maxWidth, maxHeight, quality = 0.7) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      // Calculer les nouvelles dimensions
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
 }
 
 // ============================================================
@@ -117,9 +161,24 @@ function construireCle() {
   return (p && n) ? `cv-${p}-${n}` : "cv-sans-nom";
 }
 
+function estimerTailleDonnees() {
+  try {
+    const str = JSON.stringify(cv);
+    return new Blob([str]).size;
+  } catch (e) {
+    return 0;
+  }
+}
+
 function sauvegarder() {
   const nouvelleCle = construireCle();
   try {
+    // Vérifier la taille des données
+    const taille = estimerTailleDonnees();
+    if (taille > 4 * 1024 * 1024) { // 4MB
+      afficherStatut("Attention : stockage presque plein", "warning");
+    }
+
     if (ancienneCle && ancienneCle !== nouvelleCle) {
       localStorage.removeItem(ancienneCle);
     }
@@ -128,7 +187,11 @@ function sauvegarder() {
     afficherStatut("CV enregistré automatiquement");
   } catch (err) {
     console.error(err);
-    afficherStatut("Erreur de sauvegarde : stockage plein ou bloqué", "error");
+    if (err.name === 'QuotaExceededError') {
+      afficherStatut("Stockage plein ! Exportez ou supprimez des données.", "error");
+    } else {
+      afficherStatut("Erreur de sauvegarde : stockage bloqué", "error");
+    }
   }
 }
 
@@ -139,10 +202,70 @@ function charger() {
   if (cles.length > 0) {
     const data = localStorage.getItem(cles[0]);
     if (data) {
-      cv = JSON.parse(data);
-      ancienneCle = cles[0];
+      try {
+        const parsed = JSON.parse(data);
+        // Validation basique de la structure
+        if (parsed && typeof parsed === 'object' && 'personnel' in parsed) {
+          cv = { ...cvParDefaut(), ...parsed };
+          ancienneCle = cles[0];
+        }
+      } catch (e) {
+        console.warn('Erreur lors du chargement du CV, utilisation des valeurs par défaut');
+      }
     }
   }
+}
+
+// ============================================================
+// VALIDATION IMPORT JSON
+// ============================================================
+function validerStructureCV(data) {
+  if (!data || typeof data !== 'object') {
+    return { valide: false, erreur: "Les données doivent être un objet JSON" };
+  }
+
+  // Structure de base requise
+  const structureRequise = {
+    personnel: ['prenom', 'nom', 'email', 'telephone'],
+    competences: null, // tableau
+    langues: null,
+    interets: null,
+    formations: null,
+    experiences: null,
+    activites: null
+  };
+
+  // Vérifier les types de base
+  if (typeof data.personnel !== 'object' || data.personnel === null) {
+    return { valide: false, erreur: "Le champ 'personnel' doit être un objet" };
+  }
+
+  if (!Array.isArray(data.competences) || !Array.isArray(data.langues) ||
+      !Array.isArray(data.interets) || !Array.isArray(data.formations) ||
+      !Array.isArray(data.experiences) || !Array.isArray(data.activites)) {
+    return { valide: false, erreur: "Les sections doivent être des tableaux" };
+  }
+
+  // Vérifier que les tableaux ne sont pas trop grands (limite de sécurité)
+  const maxItems = 50;
+  const sections = ['competences', 'langues', 'interets', 'formations', 'experiences', 'activites'];
+  for (const section of sections) {
+    if (data[section].length > maxItems) {
+      return { valide: false, erreur: `Trop d'éléments dans ${section} (max ${maxItems})` };
+    }
+  }
+
+  // Vérifier la taille totale
+  try {
+    const taille = JSON.stringify(data).length;
+    if (taille > 4 * 1024 * 1024) { // 4MB
+      return { valide: false, erreur: "Le fichier est trop volumineux (max 4MB)" };
+    }
+  } catch (e) {
+    return { valide: false, erreur: "Impossible de calculer la taille des données" };
+  }
+
+  return { valide: true };
 }
 
 // ============================================================
@@ -152,7 +275,8 @@ const COULEURS_CLAIRES = {
   "#1e3a5f": "#2980b9",
   "#1a5276": "#5dade2",
   "#1e8449": "#58d68d",
-  "#6c3483": "#a569bd"
+  "#6c3483": "#a569bd",
+  "#2e07db": "#6495ed" // Ajout de la 5ème couleur
 };
 
 function appliquerCouleur(couleur) {
@@ -265,13 +389,15 @@ function afficherPrevisualisation() {
 }
 
 function majInfoItem(itemId, txtId, valeur) {
-  document.getElementById(txtId).textContent = valeur || "";
+  const txtEl = document.getElementById(txtId);
+  if (txtEl) txtEl.textContent = valeur || "";
 }
 
 function majInfoItemOptional(itemId, txtId, valeur) {
   const item = document.getElementById(itemId);
-  document.getElementById(txtId).textContent = valeur || "";
-  item.hidden = !valeur;
+  const txtEl = document.getElementById(txtId);
+  if (txtEl) txtEl.textContent = valeur || "";
+  if (item) item.hidden = !valeur;
 }
 
 // ============================================================
@@ -301,7 +427,7 @@ function afficherSectionCv(section) {
         `;
       } else {
         // Affichage avec barres de progression
-        const pct = parseInt(item.niveau) || 50;
+        const pct = Math.min(100, Math.max(0, parseInt(item.niveau) || 50));
         div.className = "cv-comp-item-barre";
         div.innerHTML = `
           <p class="cv-comp-nom-barre">${escapeHtml(item.nom || "—")}</p>
@@ -384,6 +510,84 @@ function afficherSectionCv(section) {
 }
 
 // ============================================================
+// MISE À JOUR CIBLÉE D'UN ÉLÉMENT (optimisée)
+// ============================================================
+function majElementDansPrevisualisation(section, item) {
+  const conteneur = document.getElementById(`cv-${section}`);
+  if (!conteneur) return;
+
+  const elementExistant = conteneur.querySelector(`[data-id="${item.id}"]`);
+
+  // Si l'élément n'existe pas encore ou si le style de niveau a changé, on recharge la section
+  if (!elementExistant) {
+    afficherSectionCv(section);
+    return;
+  }
+
+  // Sinon, on recrée juste cet élément spécifique et on remplace l'ancien
+  const div = document.createElement("div");
+  div.dataset.id = item.id;
+
+  if (section === "competences" || section === "langues") {
+    if (cv.styleNiveau === "points") {
+      const niveau = parseInt(item.niveau) || 3;
+      let pointsHTML = "";
+      for (let i = 1; i <= 5; i++) {
+        pointsHTML += `<span class="cv-point ${i <= niveau ? "rempli" : ""}"></span>`;
+      }
+      div.className = "cv-comp-item-points";
+      div.innerHTML = `
+        <p class="cv-comp-nom-points">${escapeHtml(item.nom || "—")}</p>
+        <div class="cv-points-wrap">${pointsHTML}</div>
+      `;
+    } else {
+      const pct = Math.min(100, Math.max(0, parseInt(item.niveau) || 50));
+      div.className = "cv-comp-item-barre";
+      div.innerHTML = `
+        <p class="cv-comp-nom-barre">${escapeHtml(item.nom || "—")}</p>
+        <div class="cv-barre-fond">
+          <div class="cv-barre-fill" style="width:${pct}%"></div>
+        </div>
+      `;
+    }
+  } else if (section === "interets") {
+    div.className = "cv-interet-item";
+    div.innerHTML = `<span class="cv-interet-carre"></span><span>${escapeHtml(item.nom || "—")}</span>`;
+  } else if (section === "formations") {
+    div.className = "cv-item-droite";
+    div.innerHTML = `
+      <div class="cv-item-header">
+        <span class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</span>
+        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
+      </div>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.etablissement || "")}</p>
+      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
+    `;
+  } else if (section === "experiences") {
+    div.className = "cv-item-droite";
+    const puces = item.puces ? item.puces.split("\n").filter(l => l.trim()) : [];
+    const pucesHTML = puces.length > 0 ? `<ul class="cv-item-puces">${puces.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : "";
+    div.innerHTML = `
+      <div class="cv-item-header">
+        <span class="cv-item-titre-d">${escapeHtml(item.poste || "—")}</span>
+        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
+      </div>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
+      ${pucesHTML}
+    `;
+  } else if (section === "activites") {
+    div.className = "cv-item-droite";
+    div.innerHTML = `
+      <p class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</p>
+      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
+      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
+    `;
+  }
+
+  conteneur.replaceChild(div, elementExistant);
+}
+
+// ============================================================
 // BLOCS FORMULAIRE DYNAMIQUES
 // ============================================================
 function ajouterBlocFormulaire(section, donnees) {
@@ -397,25 +601,27 @@ function ajouterBlocFormulaire(section, donnees) {
   let contenu = `
     <div class="item-entete">
       <span class="item-num">${nomSection(section)} ${index}</span>
-      <button class="btn-suppr-item" data-action="supprimer" data-section="${section}" data-id="${donnees.id}">✕</button>
+      <button class="btn-suppr-item" data-action="supprimer" data-section="${section}" data-id="${donnees.id}" aria-label="Supprimer ${nomSection(section).toLowerCase()} ${index}">✕</button>
     </div>
   `;
 
   if (section === "competences" || section === "langues") {
     const estPoints = cv.styleNiveau === "points";
+    const niveauDefaut = estPoints ? 3 : 50;
+    const niveauActuel = donnees.niveau !== undefined ? donnees.niveau : niveauDefaut;
     contenu += `
       <div class="champ">
         <label>${section === "competences" ? "Compétence" : "Langue"}</label>
-        <input type="text" value="${escapeHtml(donnees.nom || "")}" placeholder="${section === "competences" ? "Ex: JavaScript" : "Ex: Français"}"
+        <input type="text" value="${escapeHtmlAttr(donnees.nom || "")}" placeholder="${section === "competences" ? "Ex: JavaScript" : "Ex: Français"}"
           data-section="${section}" data-id="${donnees.id}" data-prop="nom" />
       </div>
       <div class="champ">
         <label>Niveau ${estPoints ? "(1 à 5)" : "(0 à 100%)"}</label>
         <div class="niveau-wrap">
           <input type="range" min="${estPoints ? 1 : 10}" max="${estPoints ? 5 : 100}" step="${estPoints ? 1 : 5}"
-            value="${donnees.niveau || (estPoints ? 3 : 50)}"
+            value="${niveauActuel}"
             data-section="${section}" data-id="${donnees.id}" data-prop="niveau" />
-          <span class="niveau-val">${escapeHtml(String(donnees.niveau || (estPoints ? 3 : 50)))}${estPoints ? "/5" : "%"}</span>
+          <span class="niveau-val">${niveauActuel}${estPoints ? "/5" : "%"}</span>
         </div>
       </div>
     `;
@@ -425,7 +631,7 @@ function ajouterBlocFormulaire(section, donnees) {
     contenu += `
       <div class="champ">
         <label>Centre d'intérêt</label>
-        <input type="text" value="${escapeHtml(donnees.nom || "")}" placeholder="Ex: Travail en équipe"
+        <input type="text" value="${escapeHtmlAttr(donnees.nom || "")}" placeholder="Ex: Travail en équipe"
           data-section="interets" data-id="${donnees.id}" data-prop="nom" />
       </div>
     `;
@@ -435,18 +641,18 @@ function ajouterBlocFormulaire(section, donnees) {
     contenu += `
       <div class="champ">
         <label>Titre / Diplôme</label>
-        <input type="text" value="${escapeHtml(donnees.titre || "")}" placeholder="Ex: Début des études secondaires"
+        <input type="text" value="${escapeHtmlAttr(donnees.titre || "")}" placeholder="Ex: Début des études secondaires"
           data-section="formations" data-id="${donnees.id}" data-prop="titre" />
       </div>
       <div class="champ-double">
         <div class="champ">
           <label>Établissement</label>
-          <input type="text" value="${escapeHtml(donnees.etablissement || "")}" placeholder="Ex: Collège les Étoiles, SAMO"
+          <input type="text" value="${escapeHtmlAttr(donnees.etablissement || "")}" placeholder="Ex: Collège les Étoiles, SAMO"
             data-section="formations" data-id="${donnees.id}" data-prop="etablissement" />
         </div>
         <div class="champ">
           <label>Période</label>
-          <input type="text" value="${escapeHtml(donnees.periode || "")}" placeholder="Ex: oct. 2018 à juin 2021"
+          <input type="text" value="${escapeHtmlAttr(donnees.periode || "")}" placeholder="Ex: oct. 2018 à juin 2021"
             data-section="formations" data-id="${donnees.id}" data-prop="periode" />
         </div>
       </div>
@@ -463,18 +669,18 @@ function ajouterBlocFormulaire(section, donnees) {
       <div class="champ-double">
         <div class="champ">
           <label>Poste</label>
-          <input type="text" value="${escapeHtml(donnees.poste || "")}" placeholder="Ex: Menuisier"
+          <input type="text" value="${escapeHtmlAttr(donnees.poste || "")}" placeholder="Ex: Menuisier"
             data-section="experiences" data-id="${donnees.id}" data-prop="poste" />
         </div>
         <div class="champ">
           <label>Période</label>
-          <input type="text" value="${escapeHtml(donnees.periode || "")}" placeholder="Ex: de 2023 à 2025"
+          <input type="text" value="${escapeHtmlAttr(donnees.periode || "")}" placeholder="Ex: de 2023 à 2025"
             data-section="experiences" data-id="${donnees.id}" data-prop="periode" />
         </div>
       </div>
       <div class="champ">
         <label>Lieu / Entreprise</label>
-        <input type="text" value="${escapeHtml(donnees.lieu || "")}" placeholder="Ex: SAMO"
+        <input type="text" value="${escapeHtmlAttr(donnees.lieu || "")}" placeholder="Ex: SAMO"
           data-section="experiences" data-id="${donnees.id}" data-prop="lieu" />
       </div>
       <div class="champ">
@@ -490,12 +696,12 @@ function ajouterBlocFormulaire(section, donnees) {
       <div class="champ-double">
         <div class="champ">
           <label>Titre</label>
-          <input type="text" value="${escapeHtml(donnees.titre || "")}" placeholder="Ex: Inter-classes"
+          <input type="text" value="${escapeHtmlAttr(donnees.titre || "")}" placeholder="Ex: Inter-classes"
             data-section="activites" data-id="${donnees.id}" data-prop="titre" />
         </div>
         <div class="champ">
           <label>Lieu</label>
-          <input type="text" value="${escapeHtml(donnees.lieu || "")}" placeholder="Ex: Bonoua"
+          <input type="text" value="${escapeHtmlAttr(donnees.lieu || "")}" placeholder="Ex: Bonoua"
             data-section="activites" data-id="${donnees.id}" data-prop="lieu" />
         </div>
       </div>
@@ -542,13 +748,27 @@ function ajouter(section) {
 function traiterFichierPhoto(fichier, callback) {
   if (!fichier) return;
   if (!validerTypeImage(fichier)) {
-    afficherStatut("Type d'image non supporté", "error");
+    afficherStatut("Type d'image non supporté (JPEG, PNG, GIF, WebP uniquement)", "error");
     return;
   }
+
+  // Vérifier la taille du fichier (max 5MB)
+  if (fichier.size > 5 * 1024 * 1024) {
+    afficherStatut("Image trop volumineuse (max 5MB)", "error");
+    return;
+  }
+
   const reader = new FileReader();
-  reader.onload = (evt) => {
-    callback(evt.target.result);
-    sauvegarder();
+  reader.onload = async (evt) => {
+    try {
+      // Compression pour la photo de profil (200x200 max)
+      let compressed = await compresserImage(evt.target.result, 200, 200, 0.7);
+      callback(compressed);
+      sauvegarder();
+    } catch (err) {
+      console.error('Erreur compression image:', err);
+      afficherStatut("Erreur lors du traitement de l'image", "error");
+    }
   };
   reader.readAsDataURL(fichier);
 }
@@ -638,94 +858,9 @@ function mettreAJourElement(section, id, prop, valeur) {
     el[prop] = valeur;
   }
 
-  // OPTIMISATION : Mise à jour ciblée au lieu de tout reconstruire
-  const cvElement = document.querySelector(`#cv-${section} [data-id="${id}"]`);
-  if (cvElement) {
-      // Si la section est simple (interets), on peut mettre à jour directement
-      // Pour les sections complexes (experiences), le réaffichage est complexe.
-      // Par sécurité, on garde l'appel, mais on peut noter que c'est un point d'amélioration.
-    afficherSectionCv(section);
-    } else {
-      afficherSectionCv(section);
-  }
+  // Utilisation de la fonction optimisée de mise à jour
+  majElementDansPrevisualisation(section, el);
   sauvegarderDebounced();
-}
-/**
- * Met à jour uniquement l'élément modifié dans le CV
- */
-function majElementDansPrevisualisation(section, item) {
-  const conteneur = document.getElementById(`cv-${section}`);
-  if (!conteneur) return;
-
-  const elementExistant = conteneur.querySelector(`[data-id="${item.id}"]`);
-
-  // Si l'élément n'existe pas encore ou si le style de niveau a changé, on recharge la section (cas rare)
-  if (!elementExistant) {
-    afficherSectionCv(section);
-    return;
-  }
-
-  // Sinon, on recrée juste cet élément spécifique et on remplace l'ancien
-  const div = document.createElement("div");
-  div.dataset.id = item.id;
-
-  if (section === "competences" || section === "langues") {
-    if (cv.styleNiveau === "points") {
-      const niveau = parseInt(item.niveau) || 3;
-      let pointsHTML = "";
-      for (let i = 1; i <= 5; i++) {
-        pointsHTML += `<span class="cv-point ${i <= niveau ? "rempli" : ""}"></span>`;
-      }
-      div.className = "cv-comp-item-points";
-      div.innerHTML = `
-        <p class="cv-comp-nom-points">${escapeHtml(item.nom || "—")}</p>
-        <div class="cv-points-wrap">${pointsHTML}</div>
-  `;
-    } else {
-      const pct = parseInt(item.niveau) || 50;
-      div.className = "cv-comp-item-barre";
-      div.innerHTML = `
-        <p class="cv-comp-nom-barre">${escapeHtml(item.nom || "—")}</p>
-        <div class="cv-barre-fond">
-          <div class="cv-barre-fill" style="width:${pct}%"></div>
-        </div>
-      `;
-    }
-  } else if (section === "interets") {
-    div.className = "cv-interet-item";
-    div.innerHTML = `<span class="cv-interet-carre"></span><span>${escapeHtml(item.nom || "—")}</span>`;
-  } else if (section === "formations") {
-    div.className = "cv-item-droite";
-    div.innerHTML = `
-      <div class="cv-item-header">
-        <span class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</span>
-        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
-      </div>
-      <p class="cv-item-sous-titre-d">${escapeHtml(item.etablissement || "")}</p>
-      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
-    `;
-  } else if (section === "experiences") {
-    div.className = "cv-item-droite";
-    const puces = item.puces ? item.puces.split("\n").filter(l => l.trim()) : [];
-    const pucesHTML = puces.length > 0 ? `<ul class="cv-item-puces">${puces.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : "";
-    div.innerHTML = `
-      <div class="cv-item-header">
-        <span class="cv-item-titre-d">${escapeHtml(item.poste || "—")}</span>
-        <span class="cv-item-periode-d">${escapeHtml(item.periode || "")}</span>
-      </div>
-      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
-      ${pucesHTML}
-    `;
-  } else if (section === "activites") {
-    div.className = "cv-item-droite";
-    div.innerHTML = `
-      <p class="cv-item-titre-d">${escapeHtml(item.titre || "—")}</p>
-      <p class="cv-item-sous-titre-d">${escapeHtml(item.lieu || "")}</p>
-      <p class="cv-item-desc-d">${escapeHtml(item.description || "")}</p>
-    `;
-  }
-
-  conteneur.replaceChild(div, elementExistant);
 }
 
 // ============================================================
@@ -736,46 +871,66 @@ function majElementDansPrevisualisation(section, item) {
 ["inp-prenom","inp-nom","inp-naissance","inp-lieu",
  "inp-sexe","inp-nationalite","inp-email","inp-telephone"].forEach(id => {
   const el = document.getElementById(id);
+  if (!el) return;
   el.addEventListener("input", (e) => mettreAJourPersonnel(e.target.dataset.champ, e.target.value));
   el.addEventListener("change", (e) => mettreAJourPersonnel(e.target.dataset.champ, e.target.value));
 });
 
 // Profil
-document.getElementById("inp-profil").addEventListener("input", (e) => {
-  cv.profil = e.target.value;
-  document.getElementById("cv-profil").textContent = e.target.value || "Votre profil apparaîtra ici...";
-  sauvegarderDebounced();
-});
+const inpProfil = document.getElementById("inp-profil");
+if (inpProfil) {
+  inpProfil.addEventListener("input", (e) => {
+    cv.profil = e.target.value;
+    const cvProfil = document.getElementById("cv-profil");
+    if (cvProfil) cvProfil.textContent = e.target.value || "Votre profil apparaîtra ici...";
+    sauvegarderDebounced();
+  });
+}
 
 // Références
-document.getElementById("inp-references").addEventListener("input", (e) => {
-  cv.references = e.target.value;
-  document.getElementById("cv-references").textContent = e.target.value;
-  sauvegarderDebounced();
-});
+const inpReferences = document.getElementById("inp-references");
+if (inpReferences) {
+  inpReferences.addEventListener("input", (e) => {
+    cv.references = e.target.value;
+    const cvReferences = document.getElementById("cv-references");
+    if (cvReferences) cvReferences.textContent = e.target.value || "Références disponibles sur demande.";
+    sauvegarderDebounced();
+  });
+}
 
 // Signature texte
-document.getElementById("inp-signature").addEventListener("input", (e) => {
-  cv.signature = e.target.value;
-  document.getElementById("cv-signature-texte").textContent = e.target.value;
-  sauvegarderDebounced();
-});
+const inpSignature = document.getElementById("inp-signature");
+if (inpSignature) {
+  inpSignature.addEventListener("input", (e) => {
+    cv.signature = e.target.value;
+    const cvSignatureTexte = document.getElementById("cv-signature-texte");
+    if (cvSignatureTexte) cvSignatureTexte.textContent = e.target.value;
+    sauvegarderDebounced();
+  });
+}
 
 // Lieu signature
-document.getElementById("inp-sign-lieu").addEventListener("input", (e) => {
-  cv.signLieu = e.target.value;
-  document.getElementById("cv-sign-lieu").textContent = e.target.value;
-  sauvegarderDebounced();
-});
+const inpSignLieu = document.getElementById("inp-sign-lieu");
+if (inpSignLieu) {
+  inpSignLieu.addEventListener("input", (e) => {
+    cv.signLieu = e.target.value;
+    const cvSignLieu = document.getElementById("cv-sign-lieu");
+    if (cvSignLieu) cvSignLieu.textContent = e.target.value;
+    sauvegarderDebounced();
+  });
+}
 
 // Inputs dynamiques
-document.getElementById("formulaire").addEventListener("input", (e) => {
-  const el = e.target;
-  const section = el.dataset.section;
-  const id = el.dataset.id;
-  const prop = el.dataset.prop;
-  if (section && id && prop) mettreAJourElement(section, id, prop, el.value);
-});
+const formulaire = document.getElementById("formulaire");
+if (formulaire) {
+  formulaire.addEventListener("input", (e) => {
+    const el = e.target;
+    const section = el.dataset.section;
+    const id = el.dataset.id;
+    const prop = el.dataset.prop;
+    if (section && id && prop) mettreAJourElement(section, id, prop, el.value);
+  });
+}
 
 // Clics (ajouter / supprimer)
 document.addEventListener("click", (e) => {
@@ -789,142 +944,244 @@ document.addEventListener("click", (e) => {
 });
 
 // Palette couleurs
-document.getElementById("couleurs-palette").addEventListener("click", (e) => {
-  const btn = e.target.closest(".couleur-btn");
-  if (!btn) return;
-  appliquerCouleur(btn.dataset.couleur);
-  sauvegarder();
-});
+const palette = document.getElementById("couleurs-palette");
+if (palette) {
+  palette.addEventListener("click", (e) => {
+    const btn = e.target.closest(".couleur-btn");
+    if (!btn) return;
+    appliquerCouleur(btn.dataset.couleur);
+    sauvegarder();
+  });
+}
 
 // Toggle style niveau
-document.getElementById("btn-points").addEventListener("click", () => {
-  appliquerStyleNiveau("points");
-  sauvegarder();
-});
-
-document.getElementById("btn-barres").addEventListener("click", () => {
-  appliquerStyleNiveau("barres");
-  sauvegarder();
-});
+const btnPoints = document.getElementById("btn-points");
+const btnBarres = document.getElementById("btn-barres");
+if (btnPoints) {
+  btnPoints.addEventListener("click", () => {
+    appliquerStyleNiveau("points");
+    sauvegarder();
+  });
+}
+if (btnBarres) {
+  btnBarres.addEventListener("click", () => {
+    appliquerStyleNiveau("barres");
+    sauvegarder();
+  });
+}
 
 // Photo profil
 const photoUpload = document.getElementById("photo-upload");
 const inputPhoto = document.getElementById("input-photo");
-photoUpload.addEventListener("click", () => inputPhoto.click());
-photoUpload.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  photoUpload.classList.add("dragover");
-});
-photoUpload.addEventListener("dragleave", () => photoUpload.classList.remove("dragover"));
-photoUpload.addEventListener("drop", (e) => {
-  e.preventDefault();
-  photoUpload.classList.remove("dragover");
-  const fichier = e.dataTransfer.files[0];
-  if (!fichier) return;
-  traiterFichierPhoto(fichier, (src) => {
-    cv.personnel.photo = src;
-    afficherPhotoFormulaire(src);
-    afficherPhotoCv(src);
+if (photoUpload && inputPhoto) {
+  photoUpload.addEventListener("click", () => inputPhoto.click());
+  photoUpload.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    photoUpload.classList.add("dragover");
   });
-});
-activerElementClavier(photoUpload, () => inputPhoto.click());
+  photoUpload.addEventListener("dragleave", () => photoUpload.classList.remove("dragover"));
+  photoUpload.addEventListener("drop", (e) => {
+    e.preventDefault();
+    photoUpload.classList.remove("dragover");
+    const fichier = e.dataTransfer.files[0];
+    if (!fichier) return;
+    traiterFichierPhoto(fichier, (src) => {
+      cv.personnel.photo = src;
+      afficherPhotoFormulaire(src);
+      afficherPhotoCv(src);
+    });
+  });
+  activerElementClavier(photoUpload, () => inputPhoto.click());
 
-inputPhoto.addEventListener("change", (e) => {
-  const fichier = e.target.files[0];
-  if (!fichier) return;
-  traiterFichierPhoto(fichier, (src) => {
-    cv.personnel.photo = src;
-    afficherPhotoFormulaire(src);
-    afficherPhotoCv(src);
+  inputPhoto.addEventListener("change", (e) => {
+    const fichier = e.target.files[0];
+    if (!fichier) return;
+    traiterFichierPhoto(fichier, (src) => {
+      cv.personnel.photo = src;
+      afficherPhotoFormulaire(src);
+      afficherPhotoCv(src);
+    });
   });
-});
+}
 
 // Signature image
-document.getElementById("sign-upload-zone").addEventListener("click", () => {
-  document.getElementById("input-signature-img").click();
-});
-activerElementClavier(document.getElementById("sign-upload-zone"), () => document.getElementById("input-signature-img").click());
-
-document.getElementById("input-signature-img").addEventListener("change", (e) => {
-  const fichier = e.target.files[0];
-  if (!fichier) return;
-  traiterFichierPhoto(fichier, (src) => {
-    cv.signatureImg = src;
-    const prev = document.getElementById("sign-img-preview");
-    prev.src = src; prev.hidden = false;
-    document.getElementById("sign-upload-label").hidden = true;
-    const cvSignImg = document.getElementById("cv-signature-img");
-    cvSignImg.src = src; cvSignImg.hidden = false;
+const signUploadZone = document.getElementById("sign-upload-zone");
+const inputSignatureImg = document.getElementById("input-signature-img");
+if (signUploadZone && inputSignatureImg) {
+  signUploadZone.addEventListener("click", () => {
+    inputSignatureImg.click();
   });
-});
+  activerElementClavier(signUploadZone, () => inputSignatureImg.click());
+
+  inputSignatureImg.addEventListener("change", (e) => {
+    const fichier = e.target.files[0];
+    if (!fichier) return;
+    traiterFichierPhoto(fichier, (src) => {
+      // Compression pour signature (100x50 max)
+      compresserImage(src, 100, 50, 0.8).then(compressed => {
+        cv.signatureImg = compressed;
+        const prev = document.getElementById("sign-img-preview");
+        if (prev) { prev.src = compressed; prev.hidden = false; }
+        document.getElementById("sign-upload-label").hidden = true;
+        const cvSignImg = document.getElementById("cv-signature-img");
+        if (cvSignImg) { cvSignImg.src = compressed; cvSignImg.hidden = false; }
+        sauvegarder();
+      });
+    });
+  });
+}
 
 // Export PDF
-document.getElementById("btn-pdf").addEventListener("click", () => window.print());
+const btnPdf = document.getElementById("btn-pdf");
+if (btnPdf) {
+  btnPdf.addEventListener("click", () => window.print());
+}
 
 // Export/Import JSON
-document.getElementById("btn-export-json").addEventListener("click", exporterCV);
-document.getElementById("btn-import-json").addEventListener("click", () => document.getElementById("input-import-json").click());
-document.getElementById("input-import-json").addEventListener("change", importerCV);
+const btnExportJson = document.getElementById("btn-export-json");
+const btnImportJson = document.getElementById("btn-import-json");
+const inputImportJson = document.getElementById("input-import-json");
+
+if (btnExportJson) {
+  btnExportJson.addEventListener("click", exporterCV);
+}
+if (btnImportJson) {
+  btnImportJson.addEventListener("click", () => inputImportJson && inputImportJson.click());
+}
+if (inputImportJson) {
+  inputImportJson.addEventListener("change", importerCV);
+}
 
 function exporterCV() {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cv));
-  const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `${construireCle()}.json`);
-  document.body.appendChild(downloadAnchorNode);
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
+  try {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cv));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `${construireCle()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    afficherStatut("CV exporté avec succès");
+  } catch (err) {
+    console.error(err);
+    afficherStatut("Erreur lors de l'export", "error");
+  }
 }
 
 function importerCV(event) {
   const file = event.target.files[0];
   if (!file) return;
 
+  // Vérifier l'extension
+  if (!file.name.endsWith('.json')) {
+    afficherStatut("Format de fichier non valide (JSON uniquement)", "error");
+    return;
+  }
+
+  // Vérifier la taille
+  if (file.size > 5 * 1024 * 1024) {
+    afficherStatut("Fichier trop volumineux (max 5MB)", "error");
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const json = JSON.parse(e.target.result);
-      cv = json;
+
+      // Validation de la structure
+      const validation = validerStructureCV(json);
+      if (!validation.valide) {
+        afficherStatut(`Import invalide : ${validation.erreur}`, "error");
+        return;
+      }
+
+      // Fusionner avec les valeurs par défaut pour éviter les champs manquants
+      cv = { ...cvParDefaut(), ...json };
+
+      // Nettoyer les anciennes clés localStorage
+      if (ancienneCle) {
+        localStorage.removeItem(ancienneCle);
+      }
+
       sauvegarder();
+
       // Rafraîchir tout l'UI
-      location.reload();
+      // Vider toutes les listes dynamiques
+      ["competences","langues","interets","formations","experiences","activites"].forEach(s => {
+        const liste = document.getElementById(`liste-${s}`);
+        if (liste) liste.innerHTML = "";
+      });
+
+      remplirFormulaire();
+      afficherPrevisualisation();
+      afficherStatut("CV importé avec succès");
+
+      // Reset input pour permettre réimport du même fichier
+      event.target.value = "";
     } catch (err) {
-      alert("Erreur lors de l'importation du fichier JSON.");
+      console.error(err);
+      afficherStatut("Erreur lors de l'importation du fichier JSON", "error");
     }
+  };
+  reader.onerror = () => {
+    afficherStatut("Erreur de lecture du fichier", "error");
   };
   reader.readAsText(file);
 }
 
 // Réinitialisation
 const modalReset = document.getElementById("modal-reset");
-document.getElementById("btn-reset").addEventListener("click", () => { modalReset.hidden = false; });
-document.getElementById("btn-reset-annuler").addEventListener("click", () => { modalReset.hidden = true; });
-modalReset.addEventListener("click", (e) => { if (e.target === modalReset) modalReset.hidden = true; });
+const btnReset = document.getElementById("btn-reset");
+const btnResetAnnuler = document.getElementById("btn-reset-annuler");
+const btnResetConfirmer = document.getElementById("btn-reset-confirmer");
 
-document.getElementById("btn-reset-confirmer").addEventListener("click", () => {
-  localStorage.removeItem(construireCle());
-  cv = cvParDefaut();
-  ancienneCle = "";
+if (btnReset) {
+  btnReset.addEventListener("click", () => { if (modalReset) modalReset.hidden = false; });
+}
+if (btnResetAnnuler) {
+  btnResetAnnuler.addEventListener("click", () => { if (modalReset) modalReset.hidden = true; });
+}
+if (modalReset) {
+  modalReset.addEventListener("click", (e) => { if (e.target === modalReset) modalReset.hidden = true; });
+}
+if (btnResetConfirmer) {
+  btnResetConfirmer.addEventListener("click", () => {
+    if (ancienneCle) {
+      localStorage.removeItem(ancienneCle);
+    }
+    cv = cvParDefaut();
+    ancienneCle = "";
 
-  // Vider toutes les listes dynamiques
-  ["competences","langues","interets","formations","experiences","activites"].forEach(s => {
-    document.getElementById(`liste-${s}`).innerHTML = "";
+    // Vider toutes les listes dynamiques
+    ["competences","langues","interets","formations","experiences","activites"].forEach(s => {
+      const liste = document.getElementById(`liste-${s}`);
+      if (liste) liste.innerHTML = "";
+    });
+
+    // Réinitialiser photo
+    const photoPlaceholder = document.getElementById("photo-placeholder");
+    const photoPreview = document.getElementById("photo-preview");
+    const cvPhoto = document.getElementById("cv-photo");
+    const cvInitiales = document.getElementById("cv-initiales");
+
+    if (photoPlaceholder) photoPlaceholder.hidden = false;
+    if (photoPreview) photoPreview.hidden = true;
+    if (cvPhoto) cvPhoto.hidden = true;
+    if (cvInitiales) cvInitiales.hidden = false;
+
+    // Réinitialiser signature image
+    const signImgPreview = document.getElementById("sign-img-preview");
+    const signUploadLabel = document.getElementById("sign-upload-label");
+    if (signImgPreview) signImgPreview.hidden = true;
+    if (signUploadLabel) signUploadLabel.hidden = false;
+
+    remplirFormulaire();
+    afficherPrevisualisation();
+    if (modalReset) modalReset.hidden = true;
+    afficherStatut("CV réinitialisé");
   });
-
-  // Réinitialiser photo
-  document.getElementById("photo-placeholder").hidden = false;
-  document.getElementById("photo-preview").hidden     = true;
-  document.getElementById("cv-photo").hidden          = true;
-  document.getElementById("cv-initiales").hidden      = false;
-
-  // Réinitialiser signature image
-  document.getElementById("sign-img-preview").hidden  = true;
-  document.getElementById("sign-upload-label").hidden = false;
-
-  remplirFormulaire();
-  afficherPrevisualisation();
-  modalReset.hidden = true;
-});
+}
 
 // ============================================================
 // DÉMARRAGE
@@ -934,12 +1191,8 @@ remplirFormulaire();
 afficherPrevisualisation();
 
 // ============================================================
-// PWA - INSTALLATION
+// PWA - INSTALLATION (code centralisé)
 // ============================================================
-/**
- * Gestion de l'installation PWA
- * Affiche un bouton "Installer l'application" quand disponible
- */
 
 // Variable pour stocker l'événement beforeinstallprompt
 let deferredPrompt = null;
@@ -949,25 +1202,20 @@ let isInstallable = false;
  * Vérifie si la PWA est installable
  */
 function verifierInstallabilite() {
-  console.log('[PWA] Vérification installabilité...');
-
-  // Vérifier HTTPS
+  // Vérifier HTTPS (sauf localhost)
   if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-    console.warn('[PWA] ⚠️ Le site doit être en HTTPS pour l\'installation PWA (sauf localhost)');
-    console.warn('[PWA] Protocole actuel:', location.protocol);
+    console.warn('[PWA] Le site doit être en HTTPS pour l\'installation PWA (sauf localhost)');
   }
 
   // Vérifier Service Worker
   if (!('serviceWorker' in navigator)) {
-    console.warn('[PWA] ⚠️ Service Worker non supporté par ce navigateur');
+    console.warn('[PWA] Service Worker non supporté par ce navigateur');
   }
 
   // Vérifier Manifest
   const manifestLink = document.querySelector('link[rel="manifest"]');
   if (!manifestLink) {
-    console.warn('[PWA] ⚠️ Aucun manifest.json trouvé');
-  } else {
-    console.log('[PWA] Manifest trouvé:', manifestLink.href);
+    console.warn('[PWA] Aucun manifest.json trouvé');
   }
 }
 
@@ -979,12 +1227,11 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then((registration) => {
         console.log('[PWA] Service Worker enregistré avec succès:', registration.scope);
-        console.log('[PWA] État du SW:', registration.active ? 'actif' : 'en attente');
 
         // Vérifier les mises à jour du SW
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
-          console.log('[PWA] Nouvelle version du SW trouvée');
+          if (!newWorker) return;
 
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -1000,45 +1247,28 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Vérifier l'installabilité au chargement
-verifierInstallabilite();
-
 /**
  * Création du bouton d'installation PWA
  */
 function creerBoutonInstallation() {
-  let btnInstall = document.getElementById('btn-install-pwa');
-
+  const btnInstall = document.getElementById('btn-install-pwa');
   if (!btnInstall) return;
 
-  // On affiche le bouton par défaut pour assurer la visibilité.
-  // La logique d'installation (installerPWA) gérera les erreurs si ce n'est pas supporté.
-    btnInstall.style.display = 'block';
+  // Si déjà installé, cacher le bouton
+  if (estEnModeStandalone()) {
+    btnInstall.style.display = 'none';
+    return;
+  }
 
+  // Afficher le bouton
+  btnInstall.style.display = 'block';
+
+  // Ajouter l'écouteur une seule fois
   if (!btnInstall.dataset.pwaInit) {
     btnInstall.addEventListener('click', installerPWA);
     btnInstall.dataset.pwaInit = 'true';
   }
 }
-/**
- * Initialisation PWA au chargement
- */
-document.addEventListener('DOMContentLoaded', () => {
-  // On s'assure que le bouton existe
-  creerBoutonInstallation();
-
-  // Si déjà installé, cacher le bouton
-  if (estEnModeStandalone()) {
-    const btnInstall = document.getElementById('btn-install-pwa');
-    if (btnInstall) btnInstall.style.display = 'none';
-  } else {
-    // Rendre le bouton visible sur tous les navigateurs compatibles PWA
-    // même avant que 'beforeinstallprompt' ne soit déclenché.
-    // Cela améliore la visibilité de l'option d'installation.
-    const btnInstall = document.getElementById('btn-install-pwa');
-    if (btnInstall) btnInstall.style.display = 'block';
-}
-});
 
 /**
  * Installation de la PWA
@@ -1053,43 +1283,45 @@ function installerPWA() {
       }
       deferredPrompt = null;
     });
+    return;
   }
-  // 2. Si non, on vérifie les cas spécifiques (iOS ou navigateurs sans support natif)
-  else if (isIOS()) {
-      afficherGuideIOS();
+
+  // 2. Si on est sur iOS Safari, afficher le guide
+  if (isIOSSafari()) {
+    afficherGuideIOS();
+    return;
   }
-  else {
-      // Pour les autres cas (ex: déjà installé ou non supporté par le navigateur)
-      // On informe l'utilisateur
-      alert("Installation : Cliquez sur le menu de votre navigateur (les trois points en haut à droite) et choisissez 'Installer l'application' ou 'Ajouter à l'écran d'accueil'.");
-  }
+
+  // 3. Pour les autres navigateurs, afficher les instructions
+  alert("Pour installer l'application :\n\n• Sur Chrome/Edge : Cliquez sur les trois points (⋮) en haut à droite, puis 'Installer l'application'\n• Sur Firefox : Menu > 'Application' > 'Installer'\n• Sur Safari : Cliquez sur le bouton Partager, puis 'Sur l'écran d'accueil'");
 }
 
 /**
  * Écouteur pour beforeinstallprompt
- * Déclenché quand le navigateur détecte qu'on peut installer
  */
 window.addEventListener('beforeinstallprompt', (e) => {
   console.log('[PWA] beforeinstallprompt déclenché');
-  e.preventDefault(); // Empêche le comportement par défaut
+  e.preventDefault();
   deferredPrompt = e;
+  isInstallable = true;
 
-  // Afficher le bouton d'installation
   const btnInstall = document.getElementById('btn-install-pwa');
   if (btnInstall) {
     btnInstall.style.display = 'block';
   }
 });
+
 /**
  * Détecte quand l'application est installée
  */
 window.addEventListener('appinstalled', () => {
   console.log('[PWA] Application installée');
   deferredPrompt = null;
+  isInstallable = false;
   const btnInstall = document.getElementById('btn-install-pwa');
   if (btnInstall) {
     btnInstall.style.display = 'none';
-}
+  }
   afficherStatut('Application installée !');
 });
 
@@ -1101,16 +1333,10 @@ function estEnModeStandalone() {
          window.navigator.standalone === true;
 }
 
-// Créer le bouton immédiatement si le DOM est déjà chargé
-if (document.readyState !== 'loading') {
-  creerBoutonInstallation();
-}
 /**
  * ===================================================================
  * SUPPORT iOS - Guide d'installation manuel
  * ===================================================================
- * iOS ne supporte pas beforeinstallprompt, donc on affiche un guide
- * pour ajouter à l'écran d'accueil manuellement
  */
 
 /**
@@ -1125,7 +1351,6 @@ function isIOS() {
     'iPhone',
     'iPod'
   ].includes(navigator.platform)
-  // iPad sur iOS 13+
   || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 }
 
@@ -1143,8 +1368,8 @@ function afficherGuideIOS() {
   // Ne pas afficher si déjà installé
   if (estEnModeStandalone()) return;
 
-  // Ne pas afficher sur Chrome iOS (qui supporte beforeinstallprompt)
-  if (/Chrome/.test(navigator.userAgent)) return;
+  // Vérifier si le modal existe déjà
+  if (document.getElementById('modal-install-ios')) return;
 
   console.log('[PWA] iOS détecté - affichage du guide d\'installation');
 
@@ -1175,39 +1400,42 @@ function afficherGuideIOS() {
   const modal = document.getElementById('modal-install-ios');
   const btnFermer = document.getElementById('btn-fermer-guide-ios');
 
-  btnFermer.addEventListener('click', () => {
-    modal.hidden = true;
-    setTimeout(() => modal.remove(), 300);
-  });
+  if (btnFermer) {
+    btnFermer.addEventListener('click', () => {
+      if (modal) {
+        modal.hidden = true;
+        setTimeout(() => modal.remove(), 300);
+      }
+    });
+  }
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.hidden = true;
-      setTimeout(() => modal.remove(), 300);
-    }
-  });
-}
-
-/**
- * Affiche un message d'information pour les navigateurs qui ne supportent pas PWA
- */
-function afficherInfoPWA() {
-  // Si beforeinstallprompt n'est pas supporté et qu'on n'est pas sur iOS
-  if (!('onbeforeinstallprompt' in window) && !isIOS()) {
-    console.log('[PWA] beforeinstallprompt non supporté sur ce navigateur');
-    
-    // Firefox supporte PWA mais sans beforeinstallprompt
-    if (/Firefox/.test(navigator.userAgent)) {
-      console.log('[PWA] Firefox - L\'installation est possible via le menu (trois points) > Installer');
-    }
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.hidden = true;
+        setTimeout(() => modal.remove(), 300);
+      }
+    });
   }
 }
 
-// Afficher le guide iOS après un délai (après que l'utilisateur a interagi avec le site)
-if (isIOSSafari()) {
-  setTimeout(afficherGuideIOS, 3000);
+// Initialisation PWA au chargement
+document.addEventListener('DOMContentLoaded', () => {
+  creerBoutonInstallation();
+  verifierInstallabilite();
+});
+
+// Créer le bouton immédiatement si le DOM est déjà chargé
+if (document.readyState !== 'loading') {
+  creerBoutonInstallation();
 }
 
-// Afficher les infos PWA
-afficherInfoPWA();
-
+// Afficher le guide iOS après un délai pour les utilisateurs iOS Safari
+if (isIOSSafari()) {
+  setTimeout(() => {
+    // Seulement si l'utilisateur n'a pas encore interagi avec le bouton
+    if (!deferredPrompt && !estEnModeStandalone()) {
+      afficherGuideIOS();
+    }
+  }, 5000);
+}

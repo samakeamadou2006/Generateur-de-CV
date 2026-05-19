@@ -141,6 +141,20 @@ body {
     content: '📲';
     font-size: 1.2rem;
   }
+
+  .app-actions {
+  display: grid;
+    /* On passe sur 2 colonnes pour les boutons principaux restants */
+    grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+    width: 100%;
+}
+
+  /* Masquer les boutons d'import/export sur mobile */
+  #btn-export-json,
+  #btn-import-json {
+    display: none !important;
+  }
 }
 
 .btn-ajouter {
@@ -165,7 +179,6 @@ body {
   border-radius: 4px; transition: var(--transition);
 }
 .btn-suppr-item:hover { background: #fee2e2; color: var(--danger); }
-
 /* =============================================
    FORMULAIRE
 ============================================= */
@@ -323,11 +336,10 @@ body {
 input.erreur, textarea.erreur { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,0.12); }
 
 @page { size: A4 portrait; margin: 18mm; }
-
 /* =============================================
    PRÉVISUALISATION
 ============================================= */
-.previsualisation {
+  .previsualisation {
   background: var(--blanc);
   border-radius: var(--rayon);
   box-shadow: 0 4px 24px rgba(0,0,0,0.12);
@@ -336,8 +348,7 @@ input.erreur, textarea.erreur { border-color: var(--danger); box-shadow: 0 0 0 3
   top: 1.5rem;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
-}
-
+  }
 /* =============================================
    CV — MISE EN PAGE 2 COLONNES (fidèle au modèle)
 ============================================= */
@@ -608,6 +619,35 @@ input.erreur, textarea.erreur { border-color: var(--danger); box-shadow: 0 0 0 3
 }
 
 /* =============================================
+   CORRECTION RESPONSIVE BOUTONS
+============================================= */
+@media (max-width: 760px) {
+  .app-entete {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .app-entete-gauche {
+    justify-content: center;
+  }
+
+  .app-actions {
+    display: grid;
+    /* Crée une grille sur 2 ou 3 colonnes pour éviter le débordement */
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  /* Si les boutons sont trop nombreux, on peut ajuster la police */
+  .btn {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* =============================================
    RESPONSIVE
 ============================================= */
 @media (max-width: 760px) {
@@ -619,3 +659,4 @@ input.erreur, textarea.erreur { border-color: var(--danger); box-shadow: 0 0 0 3
 @media (max-width: 500px) {
   .cv-wrapper { grid-template-columns: 1fr; }
 }
+
