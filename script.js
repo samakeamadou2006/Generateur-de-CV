@@ -1009,28 +1009,17 @@ verifierInstallabilite();
 function creerBoutonInstallation() {
   let btnInstall = document.getElementById('btn-install-pwa');
 
-  if (!btnInstall) {
-    btnInstall = document.createElement('button');
-    btnInstall.id = 'btn-install-pwa';
-    btnInstall.className = 'btn btn-primaire';
-    btnInstall.innerHTML = '📲 Installer l\'app';
-    btnInstall.style.display = 'none'; // Caché par défaut
-    btnInstall.setAttribute('aria-label', 'Installer l\'application');
-    btnInstall.setAttribute('title', 'Installer le Générateur de CV sur votre appareil');
+  if (!btnInstall) return;
 
-    // Insérer le bouton dans l'en-tête, avant le bouton PDF
-    const btnPdf = document.getElementById('btn-pdf');
-    if (btnPdf && btnPdf.parentNode) {
-      btnPdf.parentNode.insertBefore(btnInstall, btnPdf);
-    }
-  }
+  // On affiche le bouton par défaut pour assurer la visibilité.
+  // La logique d'installation (installerPWA) gérera les erreurs si ce n'est pas supporté.
+    btnInstall.style.display = 'block';
 
   if (!btnInstall.dataset.pwaInit) {
     btnInstall.addEventListener('click', installerPWA);
     btnInstall.dataset.pwaInit = 'true';
   }
 }
-
 /**
  * Initialisation PWA au chargement
  */
@@ -1048,13 +1037,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cela améliore la visibilité de l'option d'installation.
     const btnInstall = document.getElementById('btn-install-pwa');
     if (btnInstall) btnInstall.style.display = 'block';
-  }
+}
 });
 
 /**
  * Installation de la PWA
  */
 function installerPWA() {
+  // 1. Si deferredPrompt est présent, on déclenche l'installation native
   if (deferredPrompt) {
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choiceResult) => {
@@ -1063,14 +1053,15 @@ function installerPWA() {
       }
       deferredPrompt = null;
     });
-  } else {
-    // Si deferredPrompt est null, l'installation automatique n'est pas disponible
-    // On peut informer l'utilisateur ou rediriger vers un guide
-    if (isIOS()) {
-        // Déjà géré par afficherGuideIOS
-    } else {
-        alert("L'installation automatique n'est pas supportée par votre navigateur. Vous pouvez installer cette application via le menu '...' (Paramètres) de votre navigateur.");
-    }
+  }
+  // 2. Si non, on vérifie les cas spécifiques (iOS ou navigateurs sans support natif)
+  else if (isIOS()) {
+      afficherGuideIOS();
+  }
+  else {
+      // Pour les autres cas (ex: déjà installé ou non supporté par le navigateur)
+      // On informe l'utilisateur
+      alert("Installation : Cliquez sur le menu de votre navigateur (les trois points en haut à droite) et choisissez 'Installer l'application' ou 'Ajouter à l'écran d'accueil'.");
   }
 }
 
@@ -1098,7 +1089,7 @@ window.addEventListener('appinstalled', () => {
   const btnInstall = document.getElementById('btn-install-pwa');
   if (btnInstall) {
     btnInstall.style.display = 'none';
-  }
+}
   afficherStatut('Application installée !');
 });
 

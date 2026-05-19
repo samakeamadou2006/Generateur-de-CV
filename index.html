@@ -30,14 +30,16 @@
             <h1 class="app-titre">Générateur de CV</h1>
             <p class="app-sous-titre">Remplis · Prévisualise en temps réel · Exporte en PDF</p>
           </div>
-        </div>
+      </div>
+<!-- Dans index.html, remplacez la partie app-actions par ceci -->
+        
         <div class="app-actions">
-          <button class="btn btn-primaire" id="btn-install-pwa" style="display:none;">📲 Installer l'application</button>
-          <button class="btn btn-secondaire" id="btn-reset">🗑 Réinitialiser</button>
-          <button class="btn btn-secondaire" id="btn-export-json">💾 Exporter JSON</button>
-          <button class="btn btn-secondaire" id="btn-import-json">📂 Importer JSON</button>
+          <button type="button" class="btn btn-primaire" id="btn-install-pwa" style="display:none;">📲 Installer l'application</button>
+          <button type="button" class="btn btn-secondaire" id="btn-reset">🗑 Réinitialiser</button>
+          <button type="button" class="btn btn-secondaire" id="btn-export-json">💾 Exporter JSON</button>
+          <button type="button" class="btn btn-secondaire" id="btn-import-json">📂 Importer JSON</button>
           <input type="file" id="input-import-json" accept=".json" hidden />
-          <button class="btn btn-primaire" id="btn-pdf">📄 Exporter PDF</button>
+          <button type="button" class="btn btn-primaire" id="btn-pdf">📄 Exporter PDF</button>
         </div>
       </header>
       <div class="app-status" aria-live="polite" id="statut-sauvegarde">Sauvegarde automatique activée</div>
@@ -56,6 +58,7 @@
               <button class="couleur-btn" data-couleur="#1a5276" style="background:#1a5276" title="Bleu acier"></button>
               <button class="couleur-btn" data-couleur="#1e8449" style="background:#1e8449" title="Vert forêt"></button>
               <button class="couleur-btn" data-couleur="#6c3483" style="background:#6c3483" title="Violet"></button>
+              <button class="couleur-btn" data-couleur="#2e07db" style="background:#2e07db" title="Bleu clair"></button>
             </div>
           </div>
           <div class="champ">
@@ -139,42 +142,42 @@
         <div class="bloc-form">
           <h2 class="bloc-titre">⚡ Compétences</h2>
           <div id="liste-competences"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="competences">+ Ajouter une compétence</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="competences">+ Ajouter une compétence</button>
         </div>
 
         <!-- LANGUES -->
         <div class="bloc-form">
           <h2 class="bloc-titre">🌍 Langues</h2>
           <div id="liste-langues"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="langues">+ Ajouter une langue</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="langues">+ Ajouter une langue</button>
         </div>
 
         <!-- CENTRES D'INTÉRÊT -->
         <div class="bloc-form">
           <h2 class="bloc-titre">❤️ Centres d'intérêt</h2>
           <div id="liste-interets"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="interets">+ Ajouter un intérêt</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="interets">+ Ajouter un intérêt</button>
         </div>
 
         <!-- FORMATION -->
         <div class="bloc-form">
           <h2 class="bloc-titre">🎓 Formation</h2>
           <div id="liste-formations"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="formations">+ Ajouter une formation</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="formations">+ Ajouter une formation</button>
         </div>
 
         <!-- EXPÉRIENCE -->
         <div class="bloc-form">
           <h2 class="bloc-titre">💼 Expérience professionnelle</h2>
           <div id="liste-experiences"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="experiences">+ Ajouter une expérience</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="experiences">+ Ajouter une expérience</button>
         </div>
 
         <!-- ACTIVITÉS EXTRA-SCOLAIRES -->
         <div class="bloc-form">
           <h2 class="bloc-titre">🏆 Activités extra-scolaires</h2>
           <div id="liste-activites"></div>
-          <button class="btn-ajouter" data-action="ajouter" data-section="activites">+ Ajouter une activité</button>
+          <button type="button" class="btn-ajouter" data-action="ajouter" data-section="activites">+ Ajouter une activité</button>
         </div>
 
         <!-- RÉFÉRENCES -->
@@ -321,8 +324,8 @@
       <h3>⚠️ Réinitialiser ?</h3>
       <p>Toutes les données du CV seront supprimées.</p>
       <div class="modal-actions">
-        <button class="btn btn-secondaire" id="btn-reset-annuler">Annuler</button>
-        <button class="btn btn-danger" id="btn-reset-confirmer">Oui, supprimer</button>
+        <button type="button" class="btn btn-secondaire" id="btn-reset-annuler">Annuler</button>
+        <button type="button" class="btn btn-danger" id="btn-reset-confirmer">Oui, supprimer</button>
       </div>
     </div>
   </div>
